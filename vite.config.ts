@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -14,5 +15,10 @@ export default defineConfig({
     alias: {
       "@": path.resolve(process.cwd(), "./src"),
     },
+  },
+  test: {
+    // Pure logic in src/domain/** runs in plain node — no DOM needed yet.
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    environment: 'node',
   },
 })
