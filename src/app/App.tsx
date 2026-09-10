@@ -1,0 +1,134 @@
+import React, { useEffect } from 'react';
+import { HashRouter, Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
+import { Home } from '@/features/home/Home';
+import { Water } from '@/features/water/Water';
+import { Calendar } from '@/features/calendar/Calendar';
+import { Pomodoro } from '@/features/focus/Pomodoro';
+import { Prayer } from '@/features/devotion/Prayer';
+import { Fitness } from '@/features/fitness/Fitness';
+import { Finance } from '@/features/finance/Finance';
+import { QuranReader } from '@/features/devotion/QuranReader';
+import { Login } from '@/features/auth/Login';
+import { TouchIDGate } from '@/features/auth/TouchIDGate';
+import { CustomCursor } from '@/ui/CustomCursor';
+import { FloatingTimer } from '@/features/focus/FloatingTimer';
+import { FloatingRadioButton } from '@/features/devotion/FloatingRadioButton';
+import { AuthProvider, useAuth } from '@/features/auth/useAuth';
+import { PomodoroProvider } from '@/features/focus/usePomodoro';
+import { FastingManager } from '@/features/fitness/FastingManager';
+import { CalendarResetManager } from '@/features/calendar/CalendarResetManager';
+import { DeviceCodeBanner } from '@/features/auth/DeviceCodeBanner';
+import { motion, AnimatePresence } from 'framer-motion';
+import '@/styles/global.css';
+
+const AnimatedPage: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 15 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -15 }}
+    transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+    className="w-full"
+  >
+    {children}
+  </motion.div>
+);
+const AppRoutes: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, loading, biometricCleared, setBiometricCleared } = useAuth();
+
+  const nav = (to: string) => {
+    const path = to === 'home' ? '/' : `/${to}`;
+    navigate(path);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Derive current page from location
+  const currentPage = location.pathname.replace('/Rakeeen-Home', '').replace('/', '') || 'home';
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-paper flex items-center justify-center">
+        <div className="text-sepia font-black tracking-[0.5em] animate-pulse">RAKEEEN</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen">
+        <CustomCursor />
+        <Login />
+      </div>
+    );
+  }
+
+  if (!biometricCleared) {
+    return (
+      <div className="min-h-screen">
+        <CustomCursor />
+        <TouchIDGate user={user} onCleared={() => setBiometricCleared(true)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen overflow-x-hidden">
+      <CustomCursor />
+      <FastingManager />
+      <CalendarResetManager />
+
+      <AnimatePresence mode="wait">
+        <Routes>
+          <Route path="/" element={<AnimatedPage><Home navigate={nav} /></AnimatedPage>} />
+          <Route path="/water" element={<AnimatedPage><Water navigate={nav} /></AnimatedPage>} />
+          <Route path="/calendar" element={<AnimatedPage><Calendar navigate={nav} /></AnimatedPage>} />
+          <Route path="/pomodoro" element={<AnimatedPage><Pomodoro navigate={nav} /></AnimatedPage>} />
+          <Route path="/devotion" element={<AnimatedPage><Prayer navigate={nav} /></AnimatedPage>} />
+          <Route path="/quran" element={<AnimatedPage><QuranReader navigate={nav} /></AnimatedPage>} />
+          <Route path="/fitness" element={<AnimatedPage><Fitness navigate={nav} /></AnimatedPage>} />
+          <Route path="/finance" element={<AnimatedPage><Finance navigate={nav} /></AnimatedPage>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AnimatePresence>
+
+      <FloatingTimer currentPage={currentPage} onNavigate={() => nav('pomodoro')} />
+      <DeviceCodeBanner user={user} />
+
+      <FloatingRadioButton onNavigate={() => nav('devotion?tab=radio')} />
+    </div>
+  );
+};
+
+const App: React.FC = () => {
+  // Toggles `.is-scrolling` on <html> while any scrollable element (window or a nested
+  // overflow container) is actively being scrolled, then removes it after a short idle
+  // pause — the scrollbar thumb CSS shows/hides based on this class.
+  useEffect(() => {
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const onScroll = () => {
+      document.documentElement.classList.add('is-scrolling');
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        document.documentElement.classList.remove('is-scrolling');
+      }, 700);
+    };
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll, { capture: true } as any);
+      if (idleTimer) clearTimeout(idleTimer);
+    };
+  }, []);
+
+  return (
+    <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <AuthProvider>
+        <PomodoroProvider>
+          <AppRoutes />
+        </PomodoroProvider>
+      </AuthProvider>
+    </HashRouter>
+  );
+};
+
+export default App;
