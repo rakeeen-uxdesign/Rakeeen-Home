@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { computeNextPrayer, type NextPrayer } from '@/domain/devotion/prayer';
 
 export const usePrayer = () => {
   const [times, setTimes] = useState<Record<string, string>>(() => {
@@ -13,7 +14,7 @@ export const usePrayer = () => {
     return localStorage.getItem('prayer_hijri') || '';
   });
   const [loading, setLoading] = useState(true);
-  const [nextPrayer, setNextPrayer] = useState<{ name: string, time: string, countdown: string, remainingMinutes: number } | null>(null);
+  const [nextPrayer, setNextPrayer] = useState<NextPrayer | null>(null);
 
   const fetchPrayerTimes = async () => {
     setLoading(true);
@@ -38,59 +39,8 @@ export const usePrayer = () => {
   };
 
   const updateNextPrayer = useCallback(() => {
-    if (!times || Object.keys(times).length === 0) return;
-    
-    const now = new Date();
-    const prayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-    let found = null;
-
-    for (const name of prayerNames) {
-      const timeStr = times[name];
-      if (!timeStr) continue;
-      const [h, m] = timeStr.split(':').map(Number);
-      const pDate = new Date(now);
-      pDate.setHours(h, m, 0, 0);
-
-      if (pDate > now) {
-        const diffMs = pDate.getTime() - now.getTime();
-        const mins = Math.floor(diffMs / 60000);
-        const secs = Math.floor((diffMs % 60000) / 1000);
-        const totalSecs = Math.floor(diffMs / 1000);
-        found = { 
-          name, 
-          time: timeStr, 
-          countdown: `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`,
-          remainingMinutes: mins,
-          totalRemainingSeconds: totalSecs
-        };
-        break;
-      }
-    }
-
-    if (!found) {
-        // If all prayers passed, next is Fajr tomorrow
-        const timeStr = times['Fajr'];
-        if (timeStr) {
-          const [h, m] = timeStr.split(':').map(Number);
-          const pDate = new Date(now);
-          pDate.setDate(pDate.getDate() + 1);
-          pDate.setHours(h, m, 0, 0);
-          const diffMs = pDate.getTime() - now.getTime();
-          const mins = Math.floor(diffMs / 60000);
-          const secs = Math.floor((diffMs % 60000) / 1000);
-          const totalSecs = Math.floor(diffMs / 1000);
-          found = {
-            name: 'Fajr',
-            time: timeStr,
-            countdown: `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`,
-            remainingMinutes: mins,
-            totalRemainingSeconds: totalSecs
-          };
-        } else {
-          found = { name: 'Fajr', time: timeStr, countdown: '--:--', remainingMinutes: 999, totalRemainingSeconds: 0 };
-        }
-    }
-    setNextPrayer(found as any);
+    const next = computeNextPrayer(times, new Date());
+    if (next) setNextPrayer(next);
   }, [times]);
 
   useEffect(() => {
