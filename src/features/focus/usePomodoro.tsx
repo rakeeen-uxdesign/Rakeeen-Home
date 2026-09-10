@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { useFirebaseSync } from '@/data/useFirebaseSync';
 import { POMODORO_WEEKLY_MOCK } from '@/constants/mockData';
 import { getPomoTodayIdx } from '@/domain/day';
+import { breakMinutesFor } from '@/domain/focus/session';
 import { formatDurationText } from '@/lib/format';
 
 interface PomodoroContextType {
@@ -178,11 +179,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const startBreak = useCallback(() => {
     const focusGained = focusDuration + Math.floor(overtime / 60);
-    
-    // Dynamic break calculation: exactly 20% of total focus session duration (focusDuration + overtime)
-    // 25 minutes => 5 minutes break
-    // 50 minutes => 10 minutes break
-    const calculatedBreakMins = Math.max(1, Math.round(focusGained * 0.2));
+    const calculatedBreakMins = breakMinutesFor(focusGained);
     setBreakDurationState(calculatedBreakMins);
 
     setSessions(s => s + 1);
@@ -225,9 +222,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (mode !== 'focus') return;
     
     const focusGained = Math.max(1, Math.floor((focusDuration * 60 - timeLeft + overtime) / 60));
-    
-    // Dynamic break calculation: exactly 20% of total focus session duration (focusDuration + overtime)
-    const calculatedBreakMins = Math.max(1, Math.round(focusGained * 0.2));
+    const calculatedBreakMins = breakMinutesFor(focusGained);
     setBreakDurationState(calculatedBreakMins);
 
     setSessions(s => s + 1);
