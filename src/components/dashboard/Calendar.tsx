@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { fetchICal } from '../../utils/fetchICal';
 
 const DotMatrixVector: React.FC<{ shapeIndex: number; isActive: boolean }> = ({ shapeIndex, isActive }) => {
   const colorClass = isActive ? 'text-forest font-bold' : 'text-ink/20';
@@ -93,6 +94,7 @@ export const Calendar: React.FC<CalendarProps> = ({ navigate }) => {
   const [activeEvent, setActiveEvent] = useState<CalEvent | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   
   useEffect(() => {
     document.title = 'Rakeeen - Calendar';
@@ -137,9 +139,8 @@ export const Calendar: React.FC<CalendarProps> = ({ navigate }) => {
     const fetchICS = async () => {
       setLoading(true);
       try {
-        const cacheBustedUrl = `${ICAL_URL}?t=${Date.now()}`;
-        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(cacheBustedUrl)}`);
-        const text = await res.text();
+        const text = await fetchICal(ICAL_URL);
+        setLoadError(false);
         const unfoldedText = text.replace(/\r?\n[ \t]/g, '');
         const lines = unfoldedText.split(/\r?\n/);
         const tempEvents: (CalEvent & { uid?: string, recurrenceId?: string, isRecurringInstance?: boolean })[] = [];
@@ -245,6 +246,7 @@ export const Calendar: React.FC<CalendarProps> = ({ navigate }) => {
         setEvents(unique);
       } catch (err) {
         console.error(err);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -416,6 +418,10 @@ export const Calendar: React.FC<CalendarProps> = ({ navigate }) => {
           {loading ? (
             <div className="py-12 text-center text-ink/20 font-black uppercase tracking-widest text-sm animate-pulse brutalist-card no-lift bg-[var(--paper-dark)]">
               Syncing Cloud Calendar...
+            </div>
+          ) : loadError && events.length === 0 ? (
+            <div className="brutalist-dashed-card no-lift py-12 text-center text-rust/50 font-black uppercase tracking-widest text-xs leading-relaxed px-6">
+              Couldn't reach Google Calendar.<br />Check your connection, or the calendar proxy (see docs/ical-proxy-worker.js).
             </div>
           ) : dayEvents.length === 0 ? (
             <div className="brutalist-dashed-card no-lift py-12 text-center text-ink/20 font-black uppercase tracking-widest text-xs">

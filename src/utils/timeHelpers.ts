@@ -5,6 +5,17 @@ export function formatTime(sec: number): string {
   return `${m}:${s}`;
 }
 
+// Human-readable duration from a minute count:
+//   45  -> "45m"        90 -> "1h 30m"        120 -> "2h"        0 -> "0m"
+export function formatDurationText(totalMinutes: number): string {
+  const mins = Math.max(0, Math.round(totalMinutes));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
 export function addMinutes(timeStr: string, mins: number): string {
   const [h, m] = timeStr.split(':').map(Number);
   const total = h * 60 + m + mins;

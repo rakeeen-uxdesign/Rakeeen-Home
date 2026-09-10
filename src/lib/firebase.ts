@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
@@ -15,7 +15,15 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+
+// `experimentalForceLongPolling` bypasses the Firestore WebChannel transport, which
+// is what throws "INTERNAL ASSERTION FAILED: Unexpected state (ca9/b815)" and then
+// permanently wedges the client (the reason a full page reload was needed to recover).
+// Cache stays in-memory — useFirebaseSync already mirrors every value to localStorage
+// for instant paint.
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;

@@ -2,8 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import { useFirebaseSync } from '../../hooks/useFirebaseSync';
 import { usePrayer } from '../../hooks/usePrayer';
 import { POMODORO_WEEKLY_MOCK } from '../../constants/mockData';
+import { fetchICal } from '../../utils/fetchICal';
 
 const ICAL_URL = 'https://calendar.google.com/calendar/ical/hamed.rakeeen%40gmail.com/private-aa7a61a1272c8a39e1d8c9e1d8ecba50/basic.ics';
+
+// Module-level throttle so the (informational) calendar fetch runs at most once per
+// 20 min regardless of how often the effect re-runs.
+let lastCalFetchAt = 0;
 
 export const CalendarResetManager: React.FC = () => {
   // Guards against double-firing when Firebase hasn't confirmed lastResetDate yet
@@ -15,17 +20,20 @@ export const CalendarResetManager: React.FC = () => {
   // focus/pomodoro reset now close out "today" at this exact moment.
   const { times: prayerTimes } = usePrayer();
 
-  // Sync states for resetting
-  const [glasses, setGlasses, glassesReady] = useFirebaseSync<number>('hydration_glasses', 0);
+  // Setters for resetting. Values are read fresh from localStorage inside the reset
+  // functions (or via functional setState), so the raw values are intentionally not
+  // destructured here — that keeps this component from re-running its effect on every
+  // water sip / focus tick.
+  const [, setGlasses, glassesReady] = useFirebaseSync<number>('hydration_glasses', 0);
   const [, setLog, logReady] = useFirebaseSync<any[]>('hydration_log', []);
-  const [history, setHistory, historyReady] = useFirebaseSync<Record<string, number>>('hydration_history', {});
-  
-  const [meals, setMeals, mealsReady] = useFirebaseSync<Record<string, any[]>>('fitness_meals', { Breakfast: [], Lunch: [], Dinner: [], Snacks: [] });
-  const [fitHistory, setFitHistory, fitHistoryReady] = useFirebaseSync<Record<string, number>>('fitness_history', {});
-  
+  const [, setHistory, historyReady] = useFirebaseSync<Record<string, number>>('hydration_history', {});
+
+  const [, setMeals, mealsReady] = useFirebaseSync<Record<string, any[]>>('fitness_meals', { Breakfast: [], Lunch: [], Dinner: [], Snacks: [] });
+  const [, setFitHistory, fitHistoryReady] = useFirebaseSync<Record<string, number>>('fitness_history', {});
+
   const [, setPomoSessions, pomoReady] = useFirebaseSync<number>('pomodoro_sessions', 0);
-  const [pomoWeek, setPomoWeek, pomoWeekReady] = useFirebaseSync<any[]>('pomodoro_week', POMODORO_WEEKLY_MOCK);
-  const [pomoHistory, setPomoHistory, pomoHistoryReady] = useFirebaseSync<Record<string, { sessions: number, minutes: number }>>('pomodoro_history', {});
+  const [, setPomoWeek, pomoWeekReady] = useFirebaseSync<any[]>('pomodoro_week', POMODORO_WEEKLY_MOCK);
+  const [, setPomoHistory, pomoHistoryReady] = useFirebaseSync<Record<string, { sessions: number, minutes: number }>>('pomodoro_history', {});
 
   const [lastResetDate, setLastResetDate, lastResetDateReady] = useFirebaseSync<string>('system_last_reset_date', '');
   const [lastPomoIshaResetDate, setLastPomoIshaResetDate, lastPomoIshaResetDateReady] = useFirebaseSync<string>('system_last_pomo_reset_date', '');
@@ -56,23 +64,22 @@ export const CalendarResetManager: React.FC = () => {
 
       console.log(`[CalendarResetManager] Recording history and resetting for: ${lastDateStr}`);
 
-      // Read the freshest values straight from localStorage instead of the closure's
-      // `glasses`/`meals` state, which can lag behind what Water.tsx/Fitness just wrote
-      // (React state updates from a Firestore listener aren't guaranteed to have flushed
-      // into this closure yet), causing the archived tally to be recorded as 0.
+      // Read the freshest values straight from localStorage instead of React state,
+      // which can lag behind what Water.tsx/Fitness just wrote (a Firestore-listener
+      // state update isn't guaranteed to have flushed yet), causing the archived
+      // tally to be recorded as 0.
       const currentGlasses = (() => {
         try { return Number(JSON.parse(window.localStorage.getItem('hydration_glasses') || '0')) || 0; }
-        catch { return glasses; }
+        catch { return 0; }
       })();
       const currentMeals = (() => {
-        try { return JSON.parse(window.localStorage.getItem('fitness_meals') || 'null') ?? meals; }
-        catch { return meals; }
+        try { return JSON.parse(window.localStorage.getItem('fitness_meals') || 'null') ?? {}; }
+        catch { return {}; }
       })();
 
       // 1. Water History
       if (currentGlasses > 0) {
-        const newHistory = { ...history, [lastDateStr]: currentGlasses };
-        setHistory(newHistory);
+        setHistory(prev => ({ ...(prev || {}), [lastDateStr]: currentGlasses }));
       }
       setGlasses(0);
       setLog([]);
@@ -80,8 +87,7 @@ export const CalendarResetManager: React.FC = () => {
       // 2. Fitness History
       const totalCalories = Object.values(currentMeals).flat().reduce((sum: number, item: any) => sum + (item.kcal || 0), 0);
       if (totalCalories > 0) {
-        const newFitHistory = { ...fitHistory, [lastDateStr]: totalCalories };
-        setFitHistory(newFitHistory);
+        setFitHistory(prev => ({ ...(prev || {}), [lastDateStr]: totalCalories }));
       }
       setMeals({ Breakfast: [], Lunch: [], Dinner: [], Snacks: [] });
     };
@@ -99,8 +105,8 @@ export const CalendarResetManager: React.FC = () => {
     const readFreshPomoWeek = (): any[] => {
       try {
         const parsed = JSON.parse(window.localStorage.getItem('pomodoro_week') || 'null');
-        return Array.isArray(parsed) && parsed.length === 7 ? parsed : pomoWeek;
-      } catch { return pomoWeek; }
+        return Array.isArray(parsed) && parsed.length === 7 ? parsed : POMODORO_WEEKLY_MOCK;
+      } catch { return POMODORO_WEEKLY_MOCK; }
     };
 
     const checkPomoReset = () => {
@@ -123,7 +129,7 @@ export const CalendarResetManager: React.FC = () => {
         const todayPomo = freshWeek[todayIdx] || { sessions: 0, minutes: 0 };
 
         if (todayPomo.sessions > 0) {
-          setPomoHistory({ ...pomoHistory, [todayDateStr]: { sessions: todayPomo.sessions, minutes: todayPomo.minutes } });
+          setPomoHistory(prev => ({ ...(prev || {}), [todayDateStr]: { sessions: todayPomo.sessions, minutes: todayPomo.minutes } }));
         }
         setPomoSessions(0);
         setPomoWeek(freshWeek.map((d: any, i: number) => i === todayIdx ? { sessions: 0, minutes: 0 } : d));
@@ -148,13 +154,16 @@ export const CalendarResetManager: React.FC = () => {
 
         if (leftoverPomo.sessions > 0) {
           console.log(`[CalendarResetManager] Merging post-Isha leftover into: ${yesterdayDateStr}`);
-          const existing = pomoHistory[yesterdayDateStr] || { sessions: 0, minutes: 0 };
-          setPomoHistory({
-            ...pomoHistory,
-            [yesterdayDateStr]: {
-              sessions: existing.sessions + leftoverPomo.sessions,
-              minutes: existing.minutes + leftoverPomo.minutes,
-            },
+          setPomoHistory(prev => {
+            const base = prev || {};
+            const existing = base[yesterdayDateStr] || { sessions: 0, minutes: 0 };
+            return {
+              ...base,
+              [yesterdayDateStr]: {
+                sessions: existing.sessions + leftoverPomo.sessions,
+                minutes: existing.minutes + leftoverPomo.minutes,
+              },
+            };
           });
         }
         setPomoSessions(0);
@@ -205,12 +214,12 @@ export const CalendarResetManager: React.FC = () => {
     };
 
     // Best-effort calendar fetch — purely informational (used only to cache the next
-    // sleep time), never gates the reset decision above.
+    // sleep time), never gates the reset decision above. Throttled to once / 20 min.
     const fetchNextSleepTime = async () => {
+      if (Date.now() - lastCalFetchAt < 20 * 60 * 1000) return;
+      lastCalFetchAt = Date.now();
       try {
-        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(ICAL_URL)}`);
-        if (!res.ok) throw new Error('Failed to fetch calendar');
-        const text = await res.text();
+        const text = await fetchICal(ICAL_URL);
         const unfoldedText = text.replace(/\r?\n[ \t]/g, '');
         const lines = unfoldedText.split(/\r?\n/);
 
@@ -294,7 +303,8 @@ export const CalendarResetManager: React.FC = () => {
     runChecks();
     return () => clearInterval(interval);
   }, [
-    lastResetDate, lastPomoIshaResetDate, lastPomoMidnightResetDate, glasses, history, meals, fitHistory, setGlasses, setLog, setHistory, setMeals, setFitHistory, setLastResetDate, setLastPomoIshaResetDate, setLastPomoMidnightResetDate, setPomoSessions, setPomoWeek, setPomoHistory, pomoWeek, pomoHistory,
+    lastResetDate, lastPomoIshaResetDate, lastPomoMidnightResetDate,
+    setGlasses, setLog, setHistory, setMeals, setFitHistory, setLastResetDate, setLastPomoIshaResetDate, setLastPomoMidnightResetDate, setPomoSessions, setPomoWeek, setPomoHistory,
     glassesReady, logReady, historyReady, mealsReady, fitHistoryReady, pomoReady, pomoWeekReady, pomoHistoryReady, lastResetDateReady, lastPomoIshaResetDateReady, lastPomoMidnightResetDateReady,
     prayerTimes
   ]);

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useFirebaseSync } from './useFirebaseSync';
 import { POMODORO_WEEKLY_MOCK } from '../constants/mockData';
-import { getPomoTodayIdx } from '../utils/timeHelpers';
+import { getPomoTodayIdx, formatDurationText } from '../utils/timeHelpers';
 
 interface PomodoroContextType {
   timeLeft: number;
@@ -83,7 +83,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (type === 'focus_timer_up') {
       embeds.push({
         title: '🔔 Focus Session Finished!',
-        description: `You finished **${focusDuration} minutes**, take a break.`,
+        description: `You finished **${formatDurationText(focusDuration)}**, take a break.`,
         color: 0x7ca982,
         footer: { text: 'Rakeeen Productivity System' },
         timestamp: new Date().toISOString()
@@ -92,9 +92,9 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const totalMins = (data?.duration || focusDuration) + Math.floor((data?.overtime || 0) / 60);
       embeds.push({
         title: '🧠 Focus Session Logged',
-        description: `Excellent! You've logged **${totalMins} minutes** of deep work.`,
+        description: `Excellent! You've logged **${formatDurationText(totalMins)}** of deep work.`,
         fields: [
-          { name: 'Base Goal', value: `${data?.duration || focusDuration}m`, inline: true },
+          { name: 'Base Goal', value: formatDurationText(data?.duration || focusDuration), inline: true },
           { name: 'Overtime', value: `${Math.floor((data?.overtime || 0) / 60)}m ${ (data?.overtime || 0) % 60}s`, inline: true }
         ],
         color: 0x7ca982,

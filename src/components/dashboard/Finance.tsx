@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Inbox, Banknote, Wallet, Trash2, Plus, Minus, Pencil } from 'lucide-react';
+import { ArrowLeft, Banknote, Wallet, Trash2, Plus, Minus, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppModal } from '../ui/AppModal';
 import {
   useFinance,
-  PendingItem,
   FinanceBanks,
   FinanceBuckets,
   SALARY_SPLIT,
@@ -335,92 +334,57 @@ const BUCKET_META: Record<keyof FinanceBuckets, { en: string; pct: string; accen
   sadaqa:   { en: 'Sadaqa',    pct: '—',   accent: '#B89228' },
 };
 
-type Category = 'Salary' | 'Freelance' | 'Transfer' | 'Ignore';
-
-interface ClassifyState {
-  item: PendingItem;
-  category: Category | null;
-  bankKey: keyof FinanceBanks;
-}
-
-function bankFromSMS(smsBank: string): keyof FinanceBanks {
-  if (smsBank === 'CIB') return 'cib';
-  if (smsBank === 'AHLY') return 'ahly_main';
-  if (smsBank === 'BM') return 'bm';
-  return 'cib';
-}
-
-function translateArabicText(text: string): string {
-  if (!text) return '';
-  return text
-    .replace(/تحويل وارد/g, 'Incoming Transfer')
-    .replace(/جهة العمل/g, 'Employer')
-    .replace(/غير معروف/g, 'Unknown')
-    .replace(/مرتب/g, 'Salary')
-    .replace(/فريلانس/g, 'Freelance')
-    .replace(/تحويل عادي/g, 'Transfer')
-    .replace(/خصم/g, 'Debit')
-    .replace(/إيداع/g, 'Deposit')
-    .replace(/جم/g, 'EGP');
-}
-
-function getSplitRows(amount: number, category: Category | null) {
-  if (!category || category === 'Transfer' || category === 'Ignore') return null;
-  const split = category === 'Salary' ? SALARY_SPLIT : FREELANCE_SPLIT;
-  return Object.entries(split).map(([key, pct]) => ({
-    label: BUCKET_META[key as keyof FinanceBuckets]?.en ?? key,
-    pct: Math.round(pct * 100),
-    amount: Math.round(amount * pct),
-  }));
-}
-
 function formatEGP(n: number) {
   return `${Math.round(n).toLocaleString('en-EG')} EGP`;
 }
 
+type SubFilter = 'day' | 'month' | 'year';
 
+// Next renewal moment for a subscription, counting forward from `now`.
+function nextRenewal(sub: Subscription, now: Date = new Date()): Date {
+  const interval = sub.intervalMonths ?? 1;
+  const start = sub.startDate ? new Date(sub.startDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startMonthIdx = start.getFullYear() * 12 + start.getMonth();
+  const [rh, rm] = (sub.reminderTime || '09:00').split(':').map(Number);
+  for (let offset = 0; offset <= 24; offset++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, sub.renewalDay, rh, rm, 0);
+    const monthsFromStart = (d.getFullYear() * 12 + d.getMonth()) - startMonthIdx;
+    if (monthsFromStart >= 0 && monthsFromStart % interval === 0 && d >= now) return d;
+  }
+  return new Date(now.getFullYear(), now.getMonth() + interval, sub.renewalDay);
+}
+
+// Which filter tab a subscription belongs to:
+//   day   -> its next renewal lands today
+//   month -> billed monthly-ish (every < 12 months)
+//   year  -> billed yearly or longer (every >= 12 months)
+function subMatchesFilter(sub: Subscription, filter: SubFilter, now: Date = new Date()): boolean {
+  if (filter === 'day') {
+    const n = nextRenewal(sub, now);
+    return n.getFullYear() === now.getFullYear() && n.getMonth() === now.getMonth() && n.getDate() === now.getDate();
+  }
+  const interval = sub.intervalMonths ?? 1;
+  return filter === 'month' ? interval < 12 : interval >= 12;
+}
 
 export const Finance: React.FC<FinanceProps> = ({ navigate }) => {
   const {
-    banks, buckets, pendingItems,
+    banks, buckets,
     totalPhysical, totalVirtual,
     gold, setGold,
     subscriptions, setSubscriptions,
     debts, setDebts,
-    classifyDeposit, ignorePending,
     updateBankBalance, updateBucketBalance,
     logs, addLog, removeLog,
   } = useFinance();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'buckets' | 'gold' | 'subscriptions' | 'debts' | 'logs'>('overview');
   const [logFilter, setLogFilter] = useState<'day' | 'month' | 'year'>('day');
-  // Default to "day" only if something is actually due today — otherwise "month" is more useful
-  const [subFilter, setSubFilter] = useState<'day' | 'month' | 'year'>(() => {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const getNextRenewalForDefault = (sub: Subscription): Date => {
-      const interval = sub.intervalMonths ?? 1;
-      const start = sub.startDate ? new Date(sub.startDate) : todayStart;
-      const startMonthIdx = start.getFullYear() * 12 + start.getMonth();
-      const [rh, rm] = (sub.reminderTime || '09:00').split(':').map(Number);
-      for (let offset = 0; offset <= 24; offset++) {
-        const d = new Date(now.getFullYear(), now.getMonth() + offset, sub.renewalDay, rh, rm, 0);
-        const monthsFromStart = (d.getFullYear() * 12 + d.getMonth()) - startMonthIdx;
-        if (monthsFromStart >= 0 && monthsFromStart % interval === 0 && d >= now) return d;
-      }
-      return new Date(now.getFullYear(), now.getMonth() + interval, sub.renewalDay);
-    };
-    const hasDueToday = (subscriptions || []).some(sub => {
-      const next = getNextRenewalForDefault(sub);
-      return next.getFullYear() === now.getFullYear() && next.getMonth() === now.getMonth() && next.getDate() === now.getDate();
-    });
-    return hasDueToday ? 'day' : 'month';
-  });
-  const [classifyState, setClassifyState] = useState<ClassifyState | null>(null);
+  // Land on "day" if anything renews today, otherwise "month".
+  const [subFilter, setSubFilter] = useState<SubFilter>(() =>
+    (subscriptions || []).some(sub => subMatchesFilter(sub, 'day')) ? 'day' : 'month'
+  );
   const [privacyMode, setPrivacyMode] = useState(true);
-
-
-  const [confirming, setConfirming] = useState(false);
 
   // Modals Visibility
   const [showAddGoldModal, setShowAddGoldModal] = useState(false);
@@ -538,26 +502,6 @@ export const Finance: React.FC<FinanceProps> = ({ navigate }) => {
       .catch(() => {})
       .finally(() => setLoadingGold(false));
   }, [activeTab]);
-
-  const openClassify = (item: PendingItem) => {
-    setClassifyState({ item, category: null, bankKey: bankFromSMS(item.bank) });
-  };
-
-  const handleConfirm = async () => {
-    if (!classifyState?.category) return;
-    setConfirming(true);
-    if (classifyState.category === 'Ignore') {
-      await ignorePending(classifyState.item.id);
-    } else {
-      await classifyDeposit(
-        classifyState.item,
-        classifyState.category as 'Salary' | 'Freelance' | 'Transfer',
-        classifyState.bankKey
-      );
-    }
-    setConfirming(false);
-    setClassifyState(null);
-  };
 
   // Gold operations
   const handleAddGold = async (e: React.FormEvent) => {
@@ -778,8 +722,6 @@ export const Finance: React.FC<FinanceProps> = ({ navigate }) => {
   const totalDebtsOwedByMe = (debts || []).filter(d => d.type === 'owed_by_me').reduce((acc, curr) => acc + curr.amount, 0);
   const netDebts = totalDebtsOwedToMe - totalDebtsOwedByMe;
 
-  const splitRows = classifyState ? getSplitRows(classifyState.item.amount, classifyState.category) : null;
-
   return (
     <div className="min-h-screen bg-bg text-ink py-6 md:py-12 px-6 md:px-12 lg:px-20 font-sans-main transition-colors duration-300">
 
@@ -823,7 +765,7 @@ export const Finance: React.FC<FinanceProps> = ({ navigate }) => {
           {(['overview', 'buckets', 'gold', 'subscriptions', 'debts', 'logs'] as const).map(tab => (
             <button
               key={tab}
-              onClick={() => { setActiveTab(tab); setClassifyState(null); }}
+              onClick={() => setActiveTab(tab)}
               className="relative font-mono-main text-[10px] uppercase tracking-widest font-bold px-4 py-2 transition-colors duration-200 cursor-pointer text-center"
               style={{
                 color: activeTab === tab ? 'var(--paper)' : 'var(--ink)',
@@ -867,139 +809,6 @@ export const Finance: React.FC<FinanceProps> = ({ navigate }) => {
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="space-y-8">
-
-            {/* INLINE PENDING INBOX */}
-            <AnimatePresence>
-              {pendingItems.length > 0 && (
-                <motion.section
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="border-2 border-rust bg-paper p-6 relative overflow-hidden"
-                >
-                  <div className="absolute top-0 left-0 right-0 h-[3px] bg-rust animate-pulse" />
-                  <div className="flex items-center gap-3 mb-4">
-                    <Inbox className="text-rust" />
-                    <span className="font-mono-main text-xs font-bold tracking-[0.25em] uppercase text-rust">
-                      INLINE PENDING INBOX
-                    </span>
-                  </div>
-
-                  <div className="space-y-6">
-                    {pendingItems.map(item => {
-                      const isCurrentlyClassifying = classifyState?.item.id === item.id;
-                      return (
-                        <div
-                          key={item.id}
-                          className="border border-ink/10 p-5 bg-paper-dark flex flex-col gap-5"
-                        >
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                              <p className="font-mono-main text-3xl font-black text-ink">{formatEGP(item.amount)}</p>
-                              <p className="font-mono-main text-[12px] font-bold uppercase tracking-widest text-ink/65 mt-1">
-                                {item.bank} — {translateArabicText(item.source)}
-                              </p>
-                              <p className="font-mono-main text-[11px] text-ink/45 mt-2 max-w-xl italic">
-                                Raw SMS: {translateArabicText(item.raw)}
-                              </p>
-                            </div>
-                            {!isCurrentlyClassifying && (
-                              <button
-                                onClick={() => openClassify(item)}
-                                className="btn-brutalist self-start md:self-auto uppercase font-mono-main text-xs py-2 px-4 cursor-pointer"
-                              >
-                                Classify Inline
-                              </button>
-                            )}
-                          </div>
-
-                          {/* INLINE ACTION PANEL */}
-                          {isCurrentlyClassifying && (
-                            <div className="border-t border-ink/10 pt-5 space-y-5">
-                              <div>
-                                <p className="font-mono-main text-[10px] uppercase tracking-widest text-ink/50 mb-3">
-                                  Select Category:
-                                </p>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                  {(['Salary', 'Freelance', 'Transfer', 'Ignore'] as Category[]).map(cat => (
-                                    <button
-                                      key={cat}
-                                      onClick={() => setClassifyState(prev => prev ? { ...prev, category: cat } : null)}
-                                      className={`py-3 px-4 border font-mono-main text-xs font-bold transition-all duration-150 cursor-pointer ${
-                                        classifyState.category === cat
-                                          ? 'border-ink bg-ink text-paper'
-                                          : 'border-ink/20 text-ink/50 hover:border-ink/60 hover:text-ink/80 bg-paper'
-                                      }`}
-                                    >
-                                      {cat}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-
-                              {/* Split details display */}
-                              {splitRows && (
-                                <div className="border border-ink/10 p-4 bg-paper max-w-md">
-                                  <p className="font-mono-main text-[10px] uppercase tracking-widest text-ink/40 mb-2">Salary Splitting Allocation</p>
-                                  {splitRows.map(row => (
-                                    <div key={row.label} className="flex items-center justify-between py-1.5 border-b border-ink/5 last:border-0">
-                                      <span className="font-mono-main text-xs font-bold text-ink/60">{row.label}</span>
-                                      <div className="flex items-baseline gap-2">
-                                        <span className="font-mono-main text-sm font-black text-ink">{formatEGP(row.amount)}</span>
-                                        <span className="font-mono-main text-[10px] text-ink/20">{row.pct}%</span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Target Bank select if not ignore */}
-                              {classifyState.category && classifyState.category !== 'Ignore' && (
-                                <div>
-                                  <p className="font-mono-main text-[10px] uppercase tracking-widest text-ink/50 mb-2">Target Bank Account:</p>
-                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    {(Object.keys(BANK_LABELS) as Array<keyof FinanceBanks>).map(bk => (
-                                      <button
-                                        key={bk}
-                                        onClick={() => setClassifyState(prev => prev ? { ...prev, bankKey: bk } : null)}
-                                        className={`py-2.5 px-3 border font-mono-main text-xs font-bold transition-all duration-150 cursor-pointer ${
-                                          classifyState.bankKey === bk
-                                            ? 'border-ink bg-ink text-paper'
-                                            : 'border-ink/15 text-ink/35 hover:border-ink/50 hover:text-ink/60 bg-paper'
-                                        }`}
-                                      >
-                                        {BANK_LABELS[bk]}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Confirm Trigger */}
-                              <div className="flex gap-3">
-                                <button
-                                  onClick={handleConfirm}
-                                  disabled={!classifyState.category || confirming}
-                                  className="btn-brutalist uppercase font-mono-main text-xs px-6 py-2.5 bg-forest/10 border-forest text-forest hover:bg-forest hover:text-paper cursor-pointer"
-                                >
-                                  {confirming ? 'Processing...' : 'Confirm Classification'}
-                                </button>
-                                <button
-                                  onClick={() => setClassifyState(null)}
-                                  className="btn-brutalist uppercase font-mono-main text-xs px-6 py-2.5 bg-ink/5 border-ink/40 text-ink/60 hover:bg-ink hover:text-paper cursor-pointer"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </motion.section>
-              )}
-            </AnimatePresence>
 
             {/* BANKS LIST - VISUAL CREDIT CARDS GRID */}
             <section>
@@ -1234,31 +1043,14 @@ export const Finance: React.FC<FinanceProps> = ({ navigate }) => {
         {/* SUBSCRIPTIONS TAB */}
         {activeTab === 'subscriptions' && (
           <div className="space-y-6">
-            {/* Summary bar */}
+            {/* Summary bar — total follows the active filter */}
             {subscriptions && subscriptions.length > 0 && (() => {
-              const now = new Date();
-              const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const getNextRenewalForTotal = (sub: Subscription): Date => {
-                const interval = sub.intervalMonths ?? 1;
-                const start = sub.startDate ? new Date(sub.startDate) : todayStart;
-                const startMonthIdx = start.getFullYear() * 12 + start.getMonth();
-                const [rh, rm] = (sub.reminderTime || '09:00').split(':').map(Number);
-                for (let offset = 0; offset <= 24; offset++) {
-                  const d = new Date(now.getFullYear(), now.getMonth() + offset, sub.renewalDay, rh, rm, 0);
-                  const monthsFromStart = (d.getFullYear() * 12 + d.getMonth()) - startMonthIdx;
-                  if (monthsFromStart >= 0 && monthsFromStart % interval === 0 && d >= now) return d;
-                }
-                return new Date(now.getFullYear(), now.getMonth() + (sub.intervalMonths ?? 1), sub.renewalDay);
-              };
-              const todaySubs = subscriptions.filter(sub => {
-                const next = getNextRenewalForTotal(sub);
-                return next.getFullYear() === now.getFullYear() && next.getMonth() === now.getMonth() && next.getDate() === now.getDate();
-              });
-              const showTodayTotal = subFilter === 'day' && todaySubs.length > 0;
-              const displayedTotal = showTodayTotal
-                ? todaySubs.reduce((s, sub) => s + sub.cost, 0)
-                : subscriptions.reduce((s, sub) => s + sub.cost, 0);
-              const totalLabel = showTodayTotal ? "Today's Due" : 'Total Subscriptions';
+              const inWindow = subscriptions.filter(sub => subMatchesFilter(sub, subFilter));
+              const displayedTotal = inWindow.reduce((s, sub) => s + sub.cost, 0);
+              const totalLabel = subFilter === 'day' ? "Today's Due" : subFilter === 'month' ? 'Monthly' : 'Yearly';
+              const countLabel = subFilter === 'day'
+                ? `${inWindow.length} due today`
+                : `${inWindow.length} ${subFilter === 'month' ? 'monthly' : 'yearly'} of ${subscriptions.length}`;
               return (
                 <div className="brutalist-card no-lift p-5 flex items-baseline justify-between">
                   <div>
@@ -1267,7 +1059,7 @@ export const Finance: React.FC<FinanceProps> = ({ navigate }) => {
                       -<MaskedValue disabled={!privacyMode}>{formatEGP(displayedTotal)}</MaskedValue>
                     </p>
                   </div>
-                  <p className="font-mono-main text-xs text-ink/30">{showTodayTotal ? `${todaySubs.length} due today` : `${subscriptions.length} subscriptions`}</p>
+                  <p className="font-mono-main text-xs text-ink/30">{countLabel}</p>
                 </div>
               );
             })()}
@@ -1300,37 +1092,18 @@ export const Finance: React.FC<FinanceProps> = ({ navigate }) => {
               </div>
             ) : (() => {
               const now = new Date();
-              const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-              const getNextRenewal = (sub: Subscription): Date => {
-                const interval = sub.intervalMonths ?? 1;
-                const start = sub.startDate ? new Date(sub.startDate) : todayStart;
-                const startMonthIdx = start.getFullYear() * 12 + start.getMonth();
-                const [rh, rm] = (sub.reminderTime || '09:00').split(':').map(Number);
-                for (let offset = 0; offset <= 24; offset++) {
-                  const d = new Date(now.getFullYear(), now.getMonth() + offset, sub.renewalDay, rh, rm, 0);
-                  const monthIdx = d.getFullYear() * 12 + d.getMonth();
-                  const monthsFromStart = monthIdx - startMonthIdx;
-                  if (monthsFromStart >= 0 && monthsFromStart % interval === 0 && d >= now) {
-                    return d;
-                  }
-                }
-                return new Date(now.getFullYear(), now.getMonth() + (sub.intervalMonths ?? 1), sub.renewalDay);
-              };
+              const withNext = (subscriptions as Subscription[])
+                .filter(sub => subMatchesFilter(sub, subFilter, now))
+                .map(sub => ({ sub, next: nextRenewal(sub, now) }));
 
-              const withNext = (subscriptions as Subscription[]).map(sub => ({ sub, next: getNextRenewal(sub) }));
-
-              const filtered = withNext.filter(({ next }) => {
-                if (subFilter === 'day') return next.getFullYear() === now.getFullYear() && next.getMonth() === now.getMonth() && next.getDate() === now.getDate();
-                if (subFilter === 'month') return next.getFullYear() === now.getFullYear() && next.getMonth() === now.getMonth();
-                return next.getFullYear() === now.getFullYear();
-              });
-
-              const sorted = [...filtered].sort((a, b) => a.next.getTime() - b.next.getTime());
+              const sorted = [...withNext].sort((a, b) => a.next.getTime() - b.next.getTime());
 
               return sorted.length === 0 ? (
                 <div className="border border-dashed border-ink/15 py-12 text-center">
-                  <p className="font-mono-main text-xs text-ink/25">No subscriptions due this {subFilter === 'day' ? 'today' : subFilter}.</p>
+                  <p className="font-mono-main text-xs text-ink/25">
+                    {subFilter === 'day' ? 'Nothing renews today.' : `No ${subFilter === 'month' ? 'monthly' : 'yearly'} subscriptions.`}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">

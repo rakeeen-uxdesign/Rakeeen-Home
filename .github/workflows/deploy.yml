@@ -42,6 +42,9 @@ jobs:
           VITE_DISCORD_POMODORO_WEBHOOK: ${{ secrets.VITE_DISCORD_POMODORO_WEBHOOK }}
           VITE_DISCORD_FASTING_WEBHOOK: ${{ secrets.VITE_DISCORD_FASTING_WEBHOOK }}
           VITE_GOLD_API_KEY: ${{ secrets.VITE_GOLD_API_KEY }}
+          # URL of the Cloudflare Worker in docs/ical-proxy-worker.js — lets the
+          # calendar fetch Google Calendar reliably. Optional; falls back to public proxies.
+          VITE_ICAL_PROXY: ${{ secrets.VITE_ICAL_PROXY }}
         run: npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

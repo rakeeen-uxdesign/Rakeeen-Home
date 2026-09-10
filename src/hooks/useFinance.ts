@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useFirebaseSync } from './useFirebaseSync';
 
 export interface FinanceBanks {
@@ -23,15 +23,6 @@ export interface FinanceTransaction {
   description: string;
   category?: string;
   timestamp: string;
-}
-
-export interface PendingItem {
-  id: string;
-  bank: string;
-  amount: number;
-  source: string;
-  raw: string;
-  receivedAt: string;
 }
 
 export interface GoldAsset {
@@ -90,19 +81,15 @@ export const FREELANCE_SPLIT: Record<string, number> = {
 };
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
-const BOMMY_URL = import.meta.env.VITE_BOMMY_URL || 'http://localhost:3002';
 
 export function useFinance() {
   const [banks, setBanks] = useFirebaseSync<FinanceBanks>('finance_banks', DEFAULT_BANKS);
   const [buckets, setBuckets] = useFirebaseSync<FinanceBuckets>('finance_buckets', DEFAULT_BUCKETS);
-  const [transactions, setTransactions] = useFirebaseSync<FinanceTransaction[]>('finance_transactions', []);
+  const [transactions] = useFirebaseSync<FinanceTransaction[]>('finance_transactions', []);
   const [gold, setGold] = useFirebaseSync<GoldAsset[]>('finance_gold', []);
   const [subscriptions, setSubscriptionsRaw] = useFirebaseSync<Subscription[]>('finance_subscriptions', []);
   const [debts, setDebts] = useFirebaseSync<Debt[]>('finance_debts', []);
   const [logs, setLogs] = useFirebaseSync<FinanceLog[]>('finance_logs', []);
-
-  const [pendingItems, setPendingItemsLocal] = useState<PendingItem[]>([]);
-  const [backendOnline, setBackendOnline] = useState(false);
 
   // Migrate old bucket structure to new 4-bucket schema (zeros everything)
   useEffect(() => {
@@ -113,113 +100,19 @@ export function useFinance() {
     }
   }, [buckets]);
 
-  const fetchPending = useCallback(async () => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/pending`, { signal: AbortSignal.timeout(3000) });
-      if (res.ok) {
-        const data = await res.json();
-        setPendingItemsLocal(data);
-        setBackendOnline(true);
-      }
-    } catch {
-      setBackendOnline(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchPending();
-    const interval = setInterval(fetchPending, 5000);
-    return () => clearInterval(interval);
-  }, [fetchPending]);
-
-  // Sync subscriptions with backend + Bommy bot
+  // Push subscriptions to the local reminder bot whenever they change
+  // (best-effort — the bot is optional and may be offline).
   useEffect(() => {
     if (!subscriptions) return;
-    const body = JSON.stringify(subscriptions);
-    if (backendOnline) {
-      fetch(`${BACKEND_URL}/api/subscriptions/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body
-      }).catch(() => {});
-    }
-    fetch(`${BOMMY_URL}/api/subscriptions/sync`, {
+    fetch(`${BACKEND_URL}/api/subscriptions/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body
+      body: JSON.stringify(subscriptions),
     }).catch(() => {});
-  }, [subscriptions, backendOnline]);
+  }, [subscriptions]);
 
   const totalPhysical = (Object.values(banks) as number[]).reduce((a, b) => a + b, 0);
   const totalVirtual = (Object.values(buckets) as number[]).reduce((a, b) => a + b, 0);
-
-  const translateArabicText = (text: string): string => {
-    if (!text) return '';
-    return text
-      .replace(/تحويل وارد/g, 'Incoming Transfer')
-      .replace(/جهة العمل/g, 'Employer')
-      .replace(/غير معروف/g, 'Unknown')
-      .replace(/مرتب/g, 'Salary')
-      .replace(/فريلانس/g, 'Freelance')
-      .replace(/تحويل عادي/g, 'Transfer')
-      .replace(/خصم/g, 'Debit')
-      .replace(/إيداع/g, 'Deposit')
-      .replace(/جم/g, 'EGP');
-  };
-
-  const classifyDeposit = async (
-    item: PendingItem,
-    category: 'Salary' | 'Freelance' | 'Transfer',
-    bankKey: keyof FinanceBanks
-  ) => {
-    const newBuckets = { ...buckets };
-
-    // Translate English UI categories to split arrays
-    const categoryMapping = {
-      'Salary': 'مرتب',
-      'Freelance': 'فريلانس',
-      'Transfer': 'تحويل عادي'
-    };
-    const savedCategory = categoryMapping[category] || category;
-
-    if (category === 'Salary') {
-      for (const [key, pct] of Object.entries(SALARY_SPLIT)) {
-        newBuckets[key as keyof FinanceBuckets] = Math.round(((newBuckets[key as keyof FinanceBuckets] || 0) + item.amount * pct) * 100) / 100;
-      }
-    } else if (category === 'Freelance') {
-      for (const [key, pct] of Object.entries(FREELANCE_SPLIT)) {
-        newBuckets[key as keyof FinanceBuckets] = Math.round(((newBuckets[key as keyof FinanceBuckets] || 0) + item.amount * pct) * 100) / 100;
-      }
-    }
-
-    const newBanks = { ...banks, [bankKey]: Math.round(((banks[bankKey] || 0) + item.amount) * 100) / 100 };
-    await setBanks(newBanks);
-    await setBuckets(newBuckets);
-
-    const translatedSource = translateArabicText(item.source);
-    const tx: FinanceTransaction = {
-      id: `${Date.now()}`,
-      type: 'deposit',
-      bank: item.bank,
-      amount: item.amount,
-      description: `${category} — ${translatedSource}`,
-      category: savedCategory,
-      timestamp: new Date().toISOString(),
-    };
-    await setTransactions([tx, ...transactions].slice(0, 100));
-
-    try {
-      await fetch(`${BACKEND_URL}/api/pending/${item.id}`, { method: 'DELETE' });
-    } catch {}
-    setPendingItemsLocal(prev => prev.filter(p => p.id !== item.id));
-  };
-
-  const ignorePending = async (id: string) => {
-    try {
-      await fetch(`${BACKEND_URL}/api/pending/${id}`, { method: 'DELETE' });
-    } catch {}
-    setPendingItemsLocal(prev => prev.filter(p => p.id !== id));
-  };
 
   const updateBankBalance = async (bankKey: keyof FinanceBanks, amount: number) => {
     await setBanks({ ...banks, [bankKey]: amount });
@@ -246,8 +139,6 @@ export function useFinance() {
     banks,
     buckets,
     transactions,
-    pendingItems,
-    backendOnline,
     totalPhysical,
     totalVirtual,
     gold,
@@ -256,8 +147,6 @@ export function useFinance() {
     setSubscriptions: setSubscriptionsRaw,
     debts,
     setDebts,
-    classifyDeposit,
-    ignorePending,
     updateBankBalance,
     updateBucketBalance,
     logs,

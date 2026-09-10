@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, ChevronRight, ChevronLeft, Volume2, VolumeX, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useFirebaseSync } from '../../hooks/useFirebaseSync';
 
 interface Ayah {
   number: number;
@@ -69,10 +70,10 @@ function toArabicNum(n: number): string {
 interface Props { navigate: (to: string) => void; }
 
 export const QuranReader: React.FC<Props> = ({ navigate }) => {
-  const [page, setPage] = useState<number>(() => {
-    const s = localStorage.getItem(STORAGE_KEY);
-    return s ? Math.min(TOTAL_PAGES, Math.max(1, Number(s))) : 1;
-  });
+  // Last page is synced to Firestore (survives localStorage eviction + follows you
+  // across devices). useFirebaseSync seeds it from localStorage for an instant first paint.
+  const [rawPage, setPage] = useFirebaseSync<number>(STORAGE_KEY, 1);
+  const page = Math.min(TOTAL_PAGES, Math.max(1, Number(rawPage) || 1));
   const [ayahs, setAyahs] = useState<Ayah[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -198,7 +199,6 @@ export const QuranReader: React.FC<Props> = ({ navigate }) => {
           const newAyahs: Ayah[] = json.data.ayahs ?? json.data;
           ayahsRef.current = newAyahs;
           setAyahs(newAyahs);
-          localStorage.setItem(STORAGE_KEY, String(page));
           if (pendingAutoPlay.current && newAyahs.length > 0) {
             pendingAutoPlay.current = false;
             buildChain(0, newAyahs);

@@ -32,3 +32,6 @@ dist-ssr
 
 # Firebase
 .firebase
+
+# Serena (local code-intelligence cache)
+.serena/

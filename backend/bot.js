@@ -2,7 +2,6 @@ import { Client, GatewayIntentBits } from 'discord.js';
 import cron from 'node-cron';
 import dotenv from 'dotenv';
 import express from 'express';
-import { parseSMS } from './smsParser.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -245,37 +244,6 @@ async function sendDiscordEmbed(embed, alternativeText) {
   }
 }
 
-async function sendDepositAlert(item) {
-  const embed = {
-    title: '📥 Income Deposit Received',
-    color: 3066993, // Green
-    fields: [
-      { name: 'Amount', value: `**${item.amount.toLocaleString('en-EG')} EGP**`, inline: true },
-      { name: 'Bank', value: item.bank, inline: true },
-      { name: 'Source', value: item.source, inline: true },
-      { name: 'Status', value: '⏳ Pending Classification in Dashboard', inline: false }
-    ]
-  };
-  const altText = `📥 **Deposit Alert**\n**${item.amount.toLocaleString('en-EG')} EGP** — ${item.bank} (${item.source})`;
-  await sendDiscordEmbed(embed, altText);
-}
-
-async function sendDebitAlert(parsed) {
-  const embed = {
-    title: '💸 Account Debited',
-    color: 15158332, // Red
-    fields: [
-      { name: 'Amount', value: `**${parsed.amount.toLocaleString('en-EG')} EGP**`, inline: true },
-      { name: 'Bank', value: parsed.bank, inline: true }
-    ]
-  };
-  if (parsed.recipient) {
-    embed.fields.push({ name: 'Recipient', value: parsed.recipient, inline: true });
-  }
-  const altText = `💸 **Debit Alert**\n**${parsed.amount.toLocaleString('en-EG')} EGP** — ${parsed.bank}`;
-  await sendDiscordEmbed(embed, altText);
-}
-
 async function sendSubscriptionAlert(sub) {
   const nowEgypt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
   const dateStr = nowEgypt.toLocaleDateString('en-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -382,68 +350,18 @@ async function seedSubscriptions() {
 // ============================================================
 const app = express();
 const WEBHOOK_PORT = parseInt(process.env.WEBHOOK_PORT || '3001');
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 
 app.use(express.json());
 app.use((_req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, X-Webhook-Secret');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
   if (_req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
-let pendingItems = [];
-
-app.post('/webhook/sms', async (req, res) => {
-  const secret = req.headers['x-webhook-secret'];
-  if (WEBHOOK_SECRET && secret !== WEBHOOK_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const { text, sender } = req.body;
-  console.log(`📥 Received SMS Webhook: Sender="${sender}", Text="${text}"`);
-  if (!text) return res.status(400).json({ error: 'Missing text' });
-
-  const parsed = parseSMS(text, sender || '');
-  console.log('🔍 Parsed SMS Result:', parsed);
-
-  if (parsed.type === 'internal' || parsed.type === 'unknown') {
-    return res.json({ status: 'ignored', type: parsed.type });
-  }
-
-  if (parsed.type === 'deposit') {
-    const item = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      bank: parsed.bank,
-      amount: parsed.amount,
-      source: parsed.source || 'Unknown',
-      raw: text,
-      receivedAt: new Date().toISOString(),
-    };
-    pendingItems.push(item);
-
-    await sendDepositAlert(item);
-
-    return res.json({ status: 'pending', item });
-  }
-
-  if (parsed.type === 'debit') {
-    await sendDebitAlert(parsed);
-
-    return res.json({ status: 'debit_noted', parsed });
-  }
-
-  return res.json({ status: 'ok', parsed });
-});
-
-app.get('/api/pending', (_req, res) => {
-  res.json(pendingItems);
-});
-
-app.delete('/api/pending/:id', (req, res) => {
-  pendingItems = pendingItems.filter(p => p.id !== req.params.id);
-  res.json({ status: 'deleted' });
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok' });
 });
 
 app.get('/api/gold-prices', (_req, res) => {

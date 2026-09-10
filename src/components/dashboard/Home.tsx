@@ -12,134 +12,15 @@ import { usePrayer } from '../../hooks/usePrayer';
 import { useSleepLock } from '../../hooks/useSleepLock';
 import { DotMatrixText } from '../ui/DotMatrixText';
 import { DMTimer, WavyProgressBar } from '../ui/TimerComponents';
-import { useFinance } from '../../hooks/useFinance';
-
-// Egypt: astronomical dark ~21:30 (Isha), pre-dawn (Fajr) ~3:30–5am depending on season
-// Uses continuous time (h + m/60) for smooth per-minute gradation
-function getNightDarkness(h: number, m: number): number {
-  const t = h + m / 60;
-  if (t >= 21 || t < 3.5)  return 1.0;
-  if (t >= 19.5 && t < 21) return 0.25 + 0.75 * ((t - 19.5) / 1.5);
-  if (t >= 18.5 && t < 19.5) return 0.1 + 0.15 * (t - 18.5);
-  if (t >= 3.5 && t < 5)   return 1.0  - 0.85 * ((t - 3.5) / 1.5);
-  if (t >= 5   && t < 6)   return 0.15 - 0.15 * (t - 5);
-  return 0;
-}
-
-function getMoonPhase(date: Date): { illumination: number; r: number; g: number; b: number } {
-  const knownNewMoon = new Date('2000-01-06T18:14:00Z');
-  const lunation = 29.53058867;
-  const elapsed = (date.getTime() - knownNewMoon.getTime()) / 86400000;
-  const phase = ((elapsed % lunation) + lunation) % lunation;
-  const illumination = 0.5 * (1 - Math.cos(2 * Math.PI * phase / lunation));
-  // Purkinje shift: crescent = more blue (dimmer = more rod vision = bluer)
-  //                 full moon = brighter = more silver-white, less shift
-  // At crescent: rgb(175, 195, 245) — deep blue-silver
-  // At full:     rgb(210, 218, 238) — silver-white with faint blue
-  const r = Math.round(175 + 35 * illumination);
-  const g = Math.round(195 + 23 * illumination);
-  const b = Math.round(245 - 7  * illumination);
-  return { illumination, r, g, b };
-}
-
-// Real-time moon position in the sky — azimuth (°) and altitude (°)
-// Observer: Egypt, Mansoura (lat 31.0379°, lon 31.3815°)
-function getMoonAltAz(date: Date): { altitude: number; azimuth: number } {
-  const LAT = 31.0379;
-  const LON = 31.3815;
-  const toRad = (d: number) => d * Math.PI / 180;
-  const toDeg = (r: number) => r * 180 / Math.PI;
-
-  // Days since J2000.0
-  const jd = date.getTime() / 86400000 + 2440587.5;
-  const d = jd - 2451545.0;
-
-  // Moon's orbital elements (simplified Jean Meeus)
-  const L = ((218.316 + 13.176396 * d) % 360 + 360) % 360;
-  const M = toRad(((134.963 + 13.064993 * d) % 360 + 360) % 360);
-  const F = toRad(((93.272  + 13.229350 * d) % 360 + 360) % 360);
-
-  const lambda = toRad(L + 6.289 * Math.sin(M));
-  const beta   = toRad(5.128 * Math.sin(F));
-  const eps    = toRad(23.4397 - 0.0000004 * d);
-
-  // Equatorial coords
-  const sinDec = Math.sin(beta) * Math.cos(eps) + Math.cos(beta) * Math.sin(eps) * Math.sin(lambda);
-  const dec = Math.asin(Math.max(-1, Math.min(1, sinDec)));
-  const ra  = Math.atan2(
-    Math.sin(lambda) * Math.cos(eps) - Math.tan(beta) * Math.sin(eps),
-    Math.cos(lambda)
-  );
-
-  // Greenwich Mean Sidereal Time → Local Sidereal Time
-  const T = d / 36525;
-  const gmst = ((280.46061837 + 360.98564736629 * d + 0.000387933 * T * T) % 360 + 360) % 360;
-  const lst = toRad((gmst + LON + 360) % 360);
-
-  // Hour angle
-  let ha = lst - ra;
-
-  // Horizontal coords
-  const latRad = toRad(LAT);
-  const sinAlt = Math.sin(latRad) * Math.sin(dec) + Math.cos(latRad) * Math.cos(dec) * Math.cos(ha);
-  const altitude = toDeg(Math.asin(Math.max(-1, Math.min(1, sinAlt))));
-
-  const cosAz = (Math.sin(dec) - Math.sin(latRad) * sinAlt) / (Math.cos(latRad) * Math.cos(Math.asin(sinAlt)));
-  let azimuth = toDeg(Math.acos(Math.max(-1, Math.min(1, cosAz))));
-  if (Math.sin(ha) > 0) azimuth = 360 - azimuth;
-
-  return { altitude, azimuth };
-}
-
-// Real-time sun position in the sky — azimuth (°) and altitude (°)
-// Observer: Egypt, Mansoura (lat 31.0379°, lon 31.3815°) — same structure as getMoonAltAz
-function getSunAltAz(date: Date): { altitude: number; azimuth: number } {
-  const LAT = 31.0379;
-  const LON = 31.3815;
-  const toRad = (d: number) => d * Math.PI / 180;
-  const toDeg = (r: number) => r * 180 / Math.PI;
-
-  const jd = date.getTime() / 86400000 + 2440587.5;
-  const d = jd - 2451545.0;
-
-  // Sun's orbital elements
-  const g = toRad(((357.529 + 0.98560028 * d) % 360 + 360) % 360);
-  const q = ((280.459 + 0.98564736 * d) % 360 + 360) % 360;
-  const L = toRad((q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g) + 360) % 360);
-  const eps = toRad(23.439 - 0.00000036 * d);
-
-  const ra = Math.atan2(Math.cos(eps) * Math.sin(L), Math.cos(L));
-  const dec = Math.asin(Math.sin(eps) * Math.sin(L));
-
-  const T = d / 36525;
-  const gmst = ((280.46061837 + 360.98564736629 * d + 0.000387933 * T * T) % 360 + 360) % 360;
-  const lst = toRad((gmst + LON + 360) % 360);
-
-  let ha = lst - ra;
-
-  const latRad = toRad(LAT);
-  const sinAlt = Math.sin(latRad) * Math.sin(dec) + Math.cos(latRad) * Math.cos(dec) * Math.cos(ha);
-  const altitude = toDeg(Math.asin(Math.max(-1, Math.min(1, sinAlt))));
-
-  const cosAz = (Math.sin(dec) - Math.sin(latRad) * sinAlt) / (Math.cos(latRad) * Math.cos(Math.asin(sinAlt)));
-  let azimuth = toDeg(Math.acos(Math.max(-1, Math.min(1, cosAz))));
-  if (Math.sin(ha) > 0) azimuth = 360 - azimuth;
-
-  return { altitude, azimuth };
-}
 
 interface HomeProps {
   navigate: (to: string) => void;
 }
 
-// Persists across Home remounts — glow only animates in ONCE per night
-let _moonGlowPersisted = false;
-// Same persistence pattern as the moon, for the daytime sun glow
-let _sunGlowPersisted = false;
 // Persists last active card so remount starts on the correct card instantly
 let _lastActiveCardId: 'water' | 'pomodoro' | 'fitness' | 'devotion' | 'calendar' | 'finance' = 'water';
 // Persists greeting name so it doesn't change on every remount
-const _NAMES = ['Hamed', 'Ghorab', 'Bommy', 'Shahyn', 'Rakeeen'];
+const _NAMES = ['Hamed', 'Ghorab', 'Shahyn', 'Rakeeen'];
 let _persistedGreetingName = _NAMES[Math.floor(Math.random() * _NAMES.length)];
 
 
@@ -454,7 +335,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
     }
     localStorage.setItem('boomy_aug_patch_v1', '1');
   }, [dailyHistoryReady, hydrationHistory, pomoHistory]);
-  const { pendingItems } = useFinance();
   const totalPhysical = Object.values(financeBanks).reduce((a, b) => a + (Number(b) || 0), 0);
   
   const workoutMinsToday = workouts
@@ -708,83 +588,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   }, [activeCardId]);
 
 
-  // Moon glow
-  const moonData = getMoonPhase(now);
-  const nightDarkness = getNightDarkness(now.getHours(), now.getMinutes());
-  const moonPos = getMoonAltAz(now);
-  // Map real azimuth → screen X: E(90°)=right(100%), S(180°)=center(50%), W(270°)=left(0%)
-  const moonGradX = Math.max(0, Math.min(100, 100 - (moonPos.azimuth - 90) / 180 * 100)).toFixed(1);
-  // Map altitude → screen Y: near horizon=25%, high in sky=0%
-  const moonGradY = moonPos.altitude > 0
-    ? Math.max(0, Math.min(25, (1 - moonPos.altitude / 75) * 25)).toFixed(1)
-    : '30';
-  // Fade intensity when moon is near/below horizon
-  const horizonFade = moonPos.altitude < 5 ? Math.max(0, moonPos.altitude / 5) : 1;
-  const moonIntensity = moonData.illumination * nightDarkness * horizonFade;
-  // Glow visible when moon is physically above the horizon (real coordinates)
-  const moonAboveHorizon = moonPos.altitude > 0;
-  const [moonGlowVisible, setMoonGlowVisible] = useState(() => _moonGlowPersisted && moonAboveHorizon);
-  const [moonTransition, setMoonTransition] = useState(() =>
-    _moonGlowPersisted && moonAboveHorizon ? 'none' : 'opacity 8s ease-in'
-  );
-  useEffect(() => {
-    if (moonAboveHorizon) {
-      if (_moonGlowPersisted) {
-        setMoonTransition('none');
-        setMoonGlowVisible(true);
-      } else {
-        setMoonTransition('opacity 8s ease-in');
-        const t = setTimeout(() => {
-          setMoonGlowVisible(true);
-          _moonGlowPersisted = true;
-        }, 100);
-        return () => clearTimeout(t);
-      }
-    } else {
-      setMoonGlowVisible(false);
-      _moonGlowPersisted = false;
-    }
-  }, [moonAboveHorizon]);
-
-  // Sun glow — same mechanics as the moon, mirrored for daylight. dayBrightness is the
-  // exact inverse of nightDarkness, so the two glows are mathematically mutually
-  // exclusive — whichever is up gets the light, never both at once.
-  const dayBrightness = 1 - nightDarkness;
-  const sunPos = getSunAltAz(now);
-  const sunGradX = Math.max(0, Math.min(100, 100 - (sunPos.azimuth - 90) / 180 * 100)).toFixed(1);
-  const sunGradY = sunPos.altitude > 0
-    ? Math.max(0, Math.min(25, (1 - sunPos.altitude / 75) * 25)).toFixed(1)
-    : '30';
-  const sunHorizonFade = sunPos.altitude < 5 ? Math.max(0, sunPos.altitude / 5) : 1;
-  // Warm shift near the horizon (sunrise/sunset orange) → brighter gold high in the sky
-  const sunR = Math.round(255 - 0 * sunHorizonFade);
-  const sunG = Math.round(140 + 80 * sunHorizonFade);
-  const sunB = Math.round(60 + 100 * sunHorizonFade);
-  const sunIntensity = dayBrightness * sunHorizonFade;
-  const sunAboveHorizon = sunPos.altitude > 0;
-  const [sunGlowVisible, setSunGlowVisible] = useState(() => _sunGlowPersisted && sunAboveHorizon);
-  const [sunTransition, setSunTransition] = useState(() =>
-    _sunGlowPersisted && sunAboveHorizon ? 'none' : 'opacity 8s ease-in'
-  );
-  useEffect(() => {
-    if (sunAboveHorizon) {
-      if (_sunGlowPersisted) {
-        setSunTransition('none');
-        setSunGlowVisible(true);
-      } else {
-        setSunTransition('opacity 8s ease-in');
-        const t = setTimeout(() => {
-          setSunGlowVisible(true);
-          _sunGlowPersisted = true;
-        }, 100);
-        return () => clearTimeout(t);
-      }
-    } else {
-      setSunGlowVisible(false);
-      _sunGlowPersisted = false;
-    }
-  }, [sunAboveHorizon]);
-
   const [greetingName, setGreetingName] = useState(() => _persistedGreetingName);
 
   // No more hard lock — the system just calls it out when you're clearly up past Isha.
@@ -1014,31 +817,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
 
   return (
     <div className="min-h-screen bg-bg text-ink py-6 md:py-12 px-6 md:px-12 lg:px-20 font-sans-main flex flex-col justify-between transition-colors duration-300 relative">
-      {/* Moon glow — rises slowly at night, fades at dawn */}
-      <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          background: `radial-gradient(ellipse at ${moonGradX}% ${moonGradY}%, rgba(${moonData.r}, ${moonData.g}, ${moonData.b}, ${(moonIntensity * 0.18).toFixed(3)}) 0%, rgba(${moonData.r - 20}, ${moonData.g - 15}, ${moonData.b}, ${(moonIntensity * 0.07).toFixed(3)}) 40%, transparent 68%)`,
-          opacity: moonGlowVisible ? 1 : 0,
-          transition: moonTransition === 'none'
-            ? 'background 60s linear'
-            : `${moonTransition}, background 60s linear`,
-          zIndex: 0,
-        }}
-      />
-      {/* Sun glow — rises slowly through the day, fades at dusk. Mutually exclusive with
-          the moon glow above since dayBrightness = 1 - nightDarkness. */}
-      <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          background: `radial-gradient(ellipse at ${sunGradX}% ${sunGradY}%, rgba(${sunR}, ${sunG}, ${sunB}, ${(sunIntensity * 0.18).toFixed(3)}) 0%, rgba(${sunR}, ${sunG - 15}, ${sunB - 20}, ${(sunIntensity * 0.07).toFixed(3)}) 40%, transparent 68%)`,
-          opacity: sunGlowVisible ? 1 : 0,
-          transition: sunTransition === 'none'
-            ? 'background 60s linear'
-            : `${sunTransition}, background 60s linear`,
-          zIndex: 0,
-        }}
-      />
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
 
       {/* 1. HEADER SECTION */}
@@ -1457,11 +1235,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                         <span className="font-mono-main text-2xl font-bold text-ink/40">EGP</span>
                       )}
                     </div>
-                    {pendingItems.length > 0 && (
-                      <span className="font-mono-main text-[10px] font-bold tracking-[0.2em] text-ink/40 uppercase mb-1">
-                        {pendingItems.length} PENDING
-                      </span>
-                    )}
                   </div>
                 </div>
               )}
