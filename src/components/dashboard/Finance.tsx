@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Banknote, Wallet, Trash2, Plus, Minus, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AppModal } from '../ui/AppModal';
+import { AppModal } from '@/components/ui/AppModal';
 import {
   useFinance,
   FinanceBanks,
@@ -12,7 +12,7 @@ import {
   Subscription,
   Debt,
   FinanceLog,
-} from '../../hooks/useFinance';
+} from '@/hooks/useFinance';
 
 interface FinanceProps {
   navigate: (to: string) => void;

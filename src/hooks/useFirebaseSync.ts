@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { db } from '../lib/firebase';
+import { db } from '@/lib/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
 export function useFirebaseSync<T>(key: string, initialValue: T) {

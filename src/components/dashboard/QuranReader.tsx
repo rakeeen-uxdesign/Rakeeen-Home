@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, ChevronRight, ChevronLeft, Volume2, VolumeX, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useFirebaseSync } from '../../hooks/useFirebaseSync';
+import { useFirebaseSync } from '@/hooks/useFirebaseSync';
 
 interface Ayah {
   number: number;

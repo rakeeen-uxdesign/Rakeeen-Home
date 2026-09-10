@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { useFirebaseSync } from './useFirebaseSync';
-import { POMODORO_WEEKLY_MOCK } from '../constants/mockData';
-import { getPomoTodayIdx, formatDurationText } from '../utils/timeHelpers';
+import { useFirebaseSync } from '@/hooks/useFirebaseSync';
+import { POMODORO_WEEKLY_MOCK } from '@/constants/mockData';
+import { getPomoTodayIdx, formatDurationText } from '@/utils/timeHelpers';
 
 interface PomodoroContextType {
   timeLeft: number;

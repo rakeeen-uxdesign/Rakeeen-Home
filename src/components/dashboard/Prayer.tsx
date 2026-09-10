@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { WavyRing } from './Pomodoro';
-import { usePrayer } from '../../hooks/usePrayer';
-import { quranRadioManager } from '../../utils/quranRadioManager';
-import { useFirebaseSync } from '../../hooks/useFirebaseSync';
+import { WavyRing } from '@/components/dashboard/Pomodoro';
+import { usePrayer } from '@/hooks/usePrayer';
+import { quranRadioManager } from '@/utils/quranRadioManager';
+import { useFirebaseSync } from '@/hooks/useFirebaseSync';
 
 
 interface PrayerProps {

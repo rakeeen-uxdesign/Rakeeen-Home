@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { usePrayer } from './usePrayer';
+import { usePrayer } from '@/hooks/usePrayer';
 
 // True from the real Isha adhan time until the real Fajr adhan time the next morning —
 // both pulled fresh from the prayer API every day. Falls back to 9:00 PM / 4:00 AM if

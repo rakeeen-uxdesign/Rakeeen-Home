@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { useFirebaseSync } from '../../hooks/useFirebaseSync';
-import { usePrayer } from '../../hooks/usePrayer';
-import { POMODORO_WEEKLY_MOCK } from '../../constants/mockData';
-import { fetchICal } from '../../utils/fetchICal';
+import { useFirebaseSync } from '@/hooks/useFirebaseSync';
+import { usePrayer } from '@/hooks/usePrayer';
+import { POMODORO_WEEKLY_MOCK } from '@/constants/mockData';
+import { fetchICal } from '@/utils/fetchICal';
 
 const ICAL_URL = 'https://calendar.google.com/calendar/ical/hamed.rakeeen%40gmail.com/private-aa7a61a1272c8a39e1d8c9e1d8ecba50/basic.ics';
 

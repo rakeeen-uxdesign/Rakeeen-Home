@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { useFirebaseSync } from '../../hooks/useFirebaseSync';
-import { usePrayer } from '../../hooks/usePrayer';
-import { niceTicks } from '../../utils/charts';
-import { ChartTooltip } from '../ui/UIComponents';
+import { useFirebaseSync } from '@/hooks/useFirebaseSync';
+import { usePrayer } from '@/hooks/usePrayer';
+import { niceTicks } from '@/utils/charts';
+import { ChartTooltip } from '@/components/ui/UIComponents';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Cell } from 'recharts';
 import { RotateCcw, Undo2, Plus, ArrowLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { DotMatrixText } from '../ui/DotMatrixText';
+import { DotMatrixText } from '@/components/ui/DotMatrixText';
 
 
 interface WaterProps {

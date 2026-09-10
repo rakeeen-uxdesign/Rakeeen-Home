@@ -1,17 +1,17 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useFirebaseSync } from '../../hooks/useFirebaseSync';
-import { uploadImage } from '../../utils/cloudinary';
+import { useFirebaseSync } from '@/hooks/useFirebaseSync';
+import { uploadImage } from '@/utils/cloudinary';
 import { Sun, Plus, Camera, MoreVertical, LogOut, Moon } from 'lucide-react';
 import { signOut } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
-import { usePomodoro } from '../../hooks/usePomodoro';
-import { AppModal } from '../ui/AppModal';
-import { getLogicalDate } from '../../utils/timeHelpers';
-import { usePrayer } from '../../hooks/usePrayer';
-import { useSleepLock } from '../../hooks/useSleepLock';
-import { DotMatrixText } from '../ui/DotMatrixText';
-import { DMTimer, WavyProgressBar } from '../ui/TimerComponents';
+import { auth } from '@/lib/firebase';
+import { usePomodoro } from '@/hooks/usePomodoro';
+import { AppModal } from '@/components/ui/AppModal';
+import { getLogicalDate } from '@/utils/timeHelpers';
+import { usePrayer } from '@/hooks/usePrayer';
+import { useSleepLock } from '@/hooks/useSleepLock';
+import { DotMatrixText } from '@/components/ui/DotMatrixText';
+import { DMTimer, WavyProgressBar } from '@/components/ui/TimerComponents';
 
 interface HomeProps {
   navigate: (to: string) => void;

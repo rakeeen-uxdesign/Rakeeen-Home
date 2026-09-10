@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useFirebaseSync } from './useFirebaseSync';
+import { useFirebaseSync } from '@/hooks/useFirebaseSync';
 
 export interface FinanceBanks {
   cib: number;

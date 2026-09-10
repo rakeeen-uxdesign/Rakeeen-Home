@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { User } from 'firebase/auth';
 import { signOut } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
+import { auth } from '@/lib/firebase';
 import {
   getStoredCredentialIds,
   registerTouchID,
   verifyTouchID,
   isBiometricSupported,
-} from '../../lib/webauthn';
-import { requestDeviceCode, verifyDeviceCode } from '../../lib/deviceAuth';
+} from '@/lib/webauthn';
+import { requestDeviceCode, verifyDeviceCode } from '@/lib/deviceAuth';
 
 interface Props {
   user: User;

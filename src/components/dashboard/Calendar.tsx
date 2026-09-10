@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { fetchICal } from '../../utils/fetchICal';
+import { fetchICal } from '@/utils/fetchICal';
 
 const DotMatrixVector: React.FC<{ shapeIndex: number; isActive: boolean }> = ({ shapeIndex, isActive }) => {
   const colorClass = isActive ? 'text-forest font-bold' : 'text-ink/20';

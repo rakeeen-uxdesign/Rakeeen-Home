@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../../lib/firebase';
+import { auth, googleProvider } from '@/lib/firebase';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { LockIcon, Login03Icon } from '@hugeicons/core-free-icons';
 

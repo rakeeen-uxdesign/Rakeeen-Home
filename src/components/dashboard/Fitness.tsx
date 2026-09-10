@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useFirebaseSync } from '../../hooks/useFirebaseSync';
-import { ChartTooltip } from '../ui/UIComponents';
-import { getLogicalDate } from '../../utils/timeHelpers';
+import { useFirebaseSync } from '@/hooks/useFirebaseSync';
+import { ChartTooltip } from '@/components/ui/UIComponents';
+import { getLogicalDate } from '@/utils/timeHelpers';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { ArrowLeft, ChevronRight, Dumbbell, Trash2, Check, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';

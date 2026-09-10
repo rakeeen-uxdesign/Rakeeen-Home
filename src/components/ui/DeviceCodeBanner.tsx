@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { User } from 'firebase/auth';
-import { onDeviceCodeRequest, generateAndStoreCode, DeviceAuthDoc } from '../../lib/deviceAuth';
+import { onDeviceCodeRequest, generateAndStoreCode, DeviceAuthDoc } from '@/lib/deviceAuth';
 
 interface Props {
   user: User;

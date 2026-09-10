@@ -1,5 +1,5 @@
 import { doc, setDoc, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { db } from '@/lib/firebase';
 
 const COL = 'device_auth_codes';
 const TTL = 5 * 60 * 1000; // 5 minutes

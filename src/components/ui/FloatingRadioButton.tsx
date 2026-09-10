@@ -1,8 +1,8 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { Radio } from 'lucide-react';
-import { useFirebaseSync } from '../../hooks/useFirebaseSync';
-import { usePomodoro } from '../../hooks/usePomodoro';
+import { useFirebaseSync } from '@/hooks/useFirebaseSync';
+import { usePomodoro } from '@/hooks/usePomodoro';
 
 interface FloatingRadioButtonProps {
   onNavigate: () => void;

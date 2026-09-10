@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { useCustomCursor } from '../../hooks/useCustomCursor';
+import { useCustomCursor } from '@/hooks/useCustomCursor';
 
 export const CustomCursor = () => {
   const cursorRef = useRef<HTMLDivElement>(null);

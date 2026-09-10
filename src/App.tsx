@@ -1,25 +1,25 @@
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
-import { Home } from './components/dashboard/Home';
-import { Water } from './components/dashboard/Water';
-import { Calendar } from './components/dashboard/Calendar';
-import { Pomodoro } from './components/dashboard/Pomodoro';
-import { Prayer } from './components/dashboard/Prayer';
-import { Fitness } from './components/dashboard/Fitness';
-import { Finance } from './components/dashboard/Finance';
-import { QuranReader } from './components/dashboard/QuranReader';
-import { Login } from './components/dashboard/Login';
-import { TouchIDGate } from './components/dashboard/TouchIDGate';
-import { CustomCursor } from './components/ui/CustomCursor';
-import { FloatingTimer } from './components/ui/FloatingTimer';
-import { FloatingRadioButton } from './components/ui/FloatingRadioButton';
-import { AuthProvider, useAuth } from './hooks/useAuth';
-import { PomodoroProvider } from './hooks/usePomodoro';
-import { FastingManager } from './components/logic/FastingManager';
-import { CalendarResetManager } from './components/logic/CalendarResetManager';
-import { DeviceCodeBanner } from './components/ui/DeviceCodeBanner';
+import { Home } from '@/components/dashboard/Home';
+import { Water } from '@/components/dashboard/Water';
+import { Calendar } from '@/components/dashboard/Calendar';
+import { Pomodoro } from '@/components/dashboard/Pomodoro';
+import { Prayer } from '@/components/dashboard/Prayer';
+import { Fitness } from '@/components/dashboard/Fitness';
+import { Finance } from '@/components/dashboard/Finance';
+import { QuranReader } from '@/components/dashboard/QuranReader';
+import { Login } from '@/components/dashboard/Login';
+import { TouchIDGate } from '@/components/dashboard/TouchIDGate';
+import { CustomCursor } from '@/components/ui/CustomCursor';
+import { FloatingTimer } from '@/components/ui/FloatingTimer';
+import { FloatingRadioButton } from '@/components/ui/FloatingRadioButton';
+import { AuthProvider, useAuth } from '@/hooks/useAuth';
+import { PomodoroProvider } from '@/hooks/usePomodoro';
+import { FastingManager } from '@/components/logic/FastingManager';
+import { CalendarResetManager } from '@/components/logic/CalendarResetManager';
+import { DeviceCodeBanner } from '@/components/ui/DeviceCodeBanner';
 import { motion, AnimatePresence } from 'framer-motion';
-import './styles/global.css';
+import '@/styles/global.css';
 
 const AnimatedPage: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <motion.div

@@ -1,8 +1,8 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { usePomodoro } from '../../hooks/usePomodoro';
-import { formatTime } from '../../utils/timeHelpers';
-import { WavyRing } from '../dashboard/Pomodoro';
+import { usePomodoro } from '@/hooks/usePomodoro';
+import { formatTime } from '@/utils/timeHelpers';
+import { WavyRing } from '@/components/dashboard/Pomodoro';
 import { motion } from 'framer-motion';
 
 interface FloatingTimerProps {

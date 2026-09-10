@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, ReferenceLine } from 'recharts';
-import { formatTime } from '../../utils/timeHelpers';
-import { niceTicks } from '../../utils/charts';
-import { ChartTooltip } from '../ui/UIComponents';
+import { formatTime } from '@/utils/timeHelpers';
+import { niceTicks } from '@/utils/charts';
+import { ChartTooltip } from '@/components/ui/UIComponents';
 import { Play, Pause, RotateCcw, Maximize2, X, ArrowLeft, ChevronRight } from 'lucide-react';
-import { usePomodoro } from '../../hooks/usePomodoro';
-import { DMTimer, WavyProgressBar } from '../ui/TimerComponents';
+import { usePomodoro } from '@/hooks/usePomodoro';
+import { DMTimer, WavyProgressBar } from '@/components/ui/TimerComponents';
 
 
 interface PomodoroProps {
