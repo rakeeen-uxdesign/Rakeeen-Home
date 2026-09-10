@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, ReferenceLine } from 'recharts';
-import { formatTime } from '@/lib/timeHelpers';
+import { formatTime } from '@/lib/format';
 import { niceTicks } from '@/lib/charts';
 import { ChartTooltip } from '@/ui/UIComponents';
 import { Play, Pause, RotateCcw, Maximize2, X, ArrowLeft, ChevronRight } from 'lucide-react';

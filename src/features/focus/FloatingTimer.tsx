@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { usePomodoro } from '@/features/focus/usePomodoro';
-import { formatTime } from '@/lib/timeHelpers';
+import { formatTime } from '@/lib/format';
 import { WavyRing } from '@/features/focus/Pomodoro';
 import { motion } from 'framer-motion';
 

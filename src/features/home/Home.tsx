@@ -7,7 +7,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/data/firebase';
 import { usePomodoro } from '@/features/focus/usePomodoro';
 import { AppModal } from '@/ui/AppModal';
-import { getLogicalDate } from '@/lib/timeHelpers';
+import { getLogicalDate } from '@/domain/day';
 import { usePrayer } from '@/features/devotion/usePrayer';
 import { useSleepLock } from '@/features/devotion/useSleepLock';
 import { DotMatrixText } from '@/ui/DotMatrixText';
