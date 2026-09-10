@@ -2,17 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Banknote, Wallet, Trash2, Plus, Minus, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppModal } from '@/ui/AppModal';
-import {
-  useFinance,
-  FinanceBanks,
-  FinanceBuckets,
-  SALARY_SPLIT,
-  FREELANCE_SPLIT,
-  GoldAsset,
-  Subscription,
-  Debt,
-  FinanceLog,
-} from '@/features/finance/useFinance';
+import { useFinance } from '@/features/finance/useFinance';
+import type {
+  FinanceBanks, FinanceBuckets, GoldAsset, Subscription, Debt, FinanceLog,
+} from '@/domain/finance/types';
+import { SALARY_SPLIT, FREELANCE_SPLIT } from '@/domain/finance/split';
+import { nextRenewal, subMatchesFilter, type SubFilter } from '@/domain/finance/subscriptions';
+import { formatEGP } from '@/domain/finance/money';
 
 interface FinanceProps {
   navigate: (to: string) => void;
@@ -333,39 +329,6 @@ const BUCKET_META: Record<keyof FinanceBuckets, { en: string; pct: string; accen
   basmala:  { en: 'Basmala',   pct: '—',   accent: 'var(--ink-faded)' },
   sadaqa:   { en: 'Sadaqa',    pct: '—',   accent: '#B89228' },
 };
-
-function formatEGP(n: number) {
-  return `${Math.round(n).toLocaleString('en-EG')} EGP`;
-}
-
-type SubFilter = 'day' | 'month' | 'year';
-
-// Next renewal moment for a subscription, counting forward from `now`.
-function nextRenewal(sub: Subscription, now: Date = new Date()): Date {
-  const interval = sub.intervalMonths ?? 1;
-  const start = sub.startDate ? new Date(sub.startDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startMonthIdx = start.getFullYear() * 12 + start.getMonth();
-  const [rh, rm] = (sub.reminderTime || '09:00').split(':').map(Number);
-  for (let offset = 0; offset <= 24; offset++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + offset, sub.renewalDay, rh, rm, 0);
-    const monthsFromStart = (d.getFullYear() * 12 + d.getMonth()) - startMonthIdx;
-    if (monthsFromStart >= 0 && monthsFromStart % interval === 0 && d >= now) return d;
-  }
-  return new Date(now.getFullYear(), now.getMonth() + interval, sub.renewalDay);
-}
-
-// Which filter tab a subscription belongs to:
-//   day   -> its next renewal lands today
-//   month -> billed monthly-ish (every < 12 months)
-//   year  -> billed yearly or longer (every >= 12 months)
-function subMatchesFilter(sub: Subscription, filter: SubFilter, now: Date = new Date()): boolean {
-  if (filter === 'day') {
-    const n = nextRenewal(sub, now);
-    return n.getFullYear() === now.getFullYear() && n.getMonth() === now.getMonth() && n.getDate() === now.getDate();
-  }
-  const interval = sub.intervalMonths ?? 1;
-  return filter === 'month' ? interval < 12 : interval >= 12;
-}
 
 export const Finance: React.FC<FinanceProps> = ({ navigate }) => {
   const {
