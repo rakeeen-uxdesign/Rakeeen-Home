@@ -118,67 +118,6 @@ export const FocusVector: React.FC<{ size?: number; paused?: boolean }> = ({ siz
 };
 
 
-// CALENDAR — 7 dots arc over a base line (week fan view).
-// The arc represents the days of a week curving overhead; today's dot (top of arc) pulses bright.
-// Base line = the "table" the calendar sits on. Clean, readable as "time/dates".
-export const CalendarVector: React.FC<{ size?: number }> = ({ size = 20 }) => {
-  // Arc: 7 day-dots arranged in a semicircle, center at (12,18), radius~14
-  const arc: [number, number, number][] = [
-    [1,  17, 0.55],  // Mon — far left
-    [4,  10, 0.35],  // Tue
-    [8,   4, 0.15],  // Wed
-    [12,  2, 0],     // Thu — today (top of arc) — delay=0, first to glow
-    [16,  4, 0.15],  // Fri
-    [20, 10, 0.35],  // Sat
-    [23, 17, 0.55],  // Sun — far right
-  ];
-  const todayIdx = 3;
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-      {/* Base line — the calendar "desk" */}
-      {([3, 8, 12, 16, 21] as const).map((cx) => (
-        <circle key={`b${cx}`} cx={cx} cy={22} r="0.9" opacity={0.2} />
-      ))}
-      {/* Arc of week-days */}
-      {arc.map(([cx, cy, delay], i) => (
-        <circle key={i} cx={cx} cy={cy}
-          r={i === todayIdx ? 1.7 : 1.1}
-          opacity={i === todayIdx ? 1 : 0.3}
-          style={i === todayIdx ? { animation: 'vectorFade 2s ease-in-out infinite', animationDelay: '0s' } : { animation: 'vectorFade 2s ease-in-out infinite', animationDelay: `${delay}s` }} />
-      ))}
-    </svg>
-  );
-};
-
-// PRAYER — crescent C-arc of dots; cascade lights like stars appearing at dusk
-// paused=true → prayer is active now, deep stillness
-export const PrayerVector: React.FC<{ size?: number; paused?: boolean }> = ({ size = 20, paused = false }) => {
-  const crescent: [number,number][] = [
-    [12,2],[17,4],[20,8],[21,12],[20,16],[17,20],[12,22],[8,20],[7,16],[8,8],
-  ];
-  const stars: [number,number][] = [[3,6],[3,18],[4,12]];
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-      {crescent.map(([cx,cy], i) => (
-        <circle key={i} cx={cx} cy={cy} r="1.2"
-          style={{
-            animation: 'vectorFade 2.4s ease-in-out infinite',
-            animationDelay: `${i * 0.24}s`,
-            animationPlayState: paused ? 'paused' : 'running',
-          }} />
-      ))}
-      {stars.map(([cx,cy], i) => (
-        <circle key={`s${i}`} cx={cx} cy={cy} r="0.9"
-          style={{
-            animation: 'vectorFade 3s ease-in-out infinite',
-            animationDelay: `${i * 0.9}s`,
-            animationPlayState: paused ? 'paused' : 'running',
-          }} />
-      ))}
-    </svg>
-  );
-};
-
 // FINANCE — vintage coin face; outer ring + inner cross-hatch + center dot.
 // Animation: shimmer sweeps clockwise around the coin edge.
 export const FinanceVector: React.FC<{ size?: number }> = ({ size = 20 }) => {
@@ -217,29 +156,6 @@ export const FinanceVector: React.FC<{ size?: number }> = ({ size = 20 }) => {
       {symbol.map(([cx, cy, delay], i) => (
         <circle key={`s${i}`} cx={cx} cy={cy} r="0.9"
           style={{ animation: 'vectorFade 2.4s ease-in-out infinite', animationDelay: `${delay + 0.3}s` }} />
-      ))}
-    </svg>
-  );
-};
-
-// FITNESS — dumbbell/barbell; energy pulse travels left plate → bar → right plate.
-// The shape is unmistakably "gym/strength". Animation = energy flowing through the lift.
-// paused=true → workout done, bar is resting
-export const FitnessVector: React.FC<{ size?: number; paused?: boolean }> = ({ size = 20, paused = false }) => {
-  const dots: [number, number, number][] = [
-    [3, 8,  0], [3, 12, 0.06], [3, 16, 0.12],
-    [7,  12, 0.22], [10, 12, 0.34], [14, 12, 0.46], [17, 12, 0.58],
-    [21, 8,  0.68], [21, 12, 0.74], [21, 16, 0.80],
-  ];
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-      {dots.map(([cx, cy, delay], i) => (
-        <circle key={i} cx={cx} cy={cy} r="1.3"
-          style={{
-            animation: 'vectorFade 1.4s ease-in-out infinite',
-            animationDelay: `${delay}s`,
-            animationPlayState: paused ? 'paused' : 'running',
-          }} />
       ))}
     </svg>
   );

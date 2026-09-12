@@ -1,23 +1,25 @@
 import React, { useEffect, useRef } from 'react';
 import { useFirebaseSync } from '@/data/useFirebaseSync';
-import { usePrayer } from '@/features/devotion/usePrayer';
+import { usePrayer } from '@/data/usePrayer';
 import { POMODORO_WEEKLY_MOCK } from '@/constants/mockData';
-import { fetchICal } from '@/lib/fetchICal';
 
-const ICAL_URL = 'https://calendar.google.com/calendar/ical/hamed.rakeeen%40gmail.com/private-aa7a61a1272c8a39e1d8c9e1d8ecba50/basic.ics';
-
-// Module-level throttle so the (informational) calendar fetch runs at most once per
-// 20 min regardless of how often the effect re-runs.
-let lastCalFetchAt = 0;
-
-export const CalendarResetManager: React.FC = () => {
+/**
+ * Rolls the day over: archives water into history and zeroes today's count at
+ * 18:00 (3h before the fixed 21:00 sleep schedule), and archives/zeroes focus
+ * sessions at two triggers — real Isha adhan (snapshot today so-far) and real
+ * midnight (merge the post-Isha leftover into that same day's history).
+ *
+ * Not calendar-related — it used to also cache "next sleep time" from a Google
+ * Calendar feed for a since-removed Calendar page; that fetch is gone.
+ */
+export const DailyResetManager: React.FC = () => {
   // Guards against double-firing when Firebase hasn't confirmed lastResetDate yet
   const firedResetMarkerRef = useRef<string>('');
   const firedPomoIshaMarkerRef = useRef<string>('');
   const firedPomoMidnightMarkerRef = useRef<string>('');
 
-  // Real Isha adhan time, refreshed daily from the prayer API — both the water and the
-  // focus/pomodoro reset now close out "today" at this exact moment.
+  // Real Isha adhan time, refreshed daily from the prayer API — closes out "today"
+  // for the focus/pomodoro reset at this exact moment.
   const { times: prayerTimes } = usePrayer();
 
   // Setters for resetting. Values are read fresh from localStorage inside the reset
@@ -28,9 +30,6 @@ export const CalendarResetManager: React.FC = () => {
   const [, setLog, logReady] = useFirebaseSync<any[]>('hydration_log', []);
   const [, setHistory, historyReady] = useFirebaseSync<Record<string, number>>('hydration_history', {});
 
-  const [, setMeals, mealsReady] = useFirebaseSync<Record<string, any[]>>('fitness_meals', { Breakfast: [], Lunch: [], Dinner: [], Snacks: [] });
-  const [, setFitHistory, fitHistoryReady] = useFirebaseSync<Record<string, number>>('fitness_history', {});
-
   const [, setPomoSessions, pomoReady] = useFirebaseSync<number>('pomodoro_sessions', 0);
   const [, setPomoWeek, pomoWeekReady] = useFirebaseSync<any[]>('pomodoro_week', POMODORO_WEEKLY_MOCK);
   const [, setPomoHistory, pomoHistoryReady] = useFirebaseSync<Record<string, { sessions: number, minutes: number }>>('pomodoro_history', {});
@@ -40,13 +39,11 @@ export const CalendarResetManager: React.FC = () => {
   const [lastPomoMidnightResetDate, setLastPomoMidnightResetDate, lastPomoMidnightResetDateReady] = useFirebaseSync<string>('system_last_pomo_midnight_reset_date', '');
 
   useEffect(() => {
-    // Wait until ALL Firebase sync hooks are ready before we check the calendar and potentially run reset
+    // Wait until ALL Firebase sync hooks are ready before checking whether to reset
     if (
       !glassesReady ||
       !logReady ||
       !historyReady ||
-      !mealsReady ||
-      !fitHistoryReady ||
       !pomoReady ||
       !pomoWeekReady ||
       !pomoHistoryReady ||
@@ -54,7 +51,7 @@ export const CalendarResetManager: React.FC = () => {
       !lastPomoIshaResetDateReady ||
       !lastPomoMidnightResetDateReady
     ) {
-      console.log('[CalendarResetManager] Waiting for Firebase sync to be ready...');
+      console.log('[DailyResetManager] Waiting for Firebase sync to be ready...');
       return;
     }
 
@@ -62,34 +59,22 @@ export const CalendarResetManager: React.FC = () => {
       // We calculate the logical "yesterday" relative to the sleep date
       const lastDateStr = new Date(sleepDate.getTime() - 12 * 60 * 60 * 1000).toDateString();
 
-      console.log(`[CalendarResetManager] Recording history and resetting for: ${lastDateStr}`);
+      console.log(`[DailyResetManager] Recording water history and resetting for: ${lastDateStr}`);
 
-      // Read the freshest values straight from localStorage instead of React state,
-      // which can lag behind what Water.tsx/Fitness just wrote (a Firestore-listener
-      // state update isn't guaranteed to have flushed yet), causing the archived
-      // tally to be recorded as 0.
+      // Read the freshest value straight from localStorage instead of React state,
+      // which can lag behind what Water.tsx just wrote (a Firestore-listener state
+      // update isn't guaranteed to have flushed yet), causing the archived tally to
+      // be recorded as 0.
       const currentGlasses = (() => {
         try { return Number(JSON.parse(window.localStorage.getItem('hydration_glasses') || '0')) || 0; }
         catch { return 0; }
       })();
-      const currentMeals = (() => {
-        try { return JSON.parse(window.localStorage.getItem('fitness_meals') || 'null') ?? {}; }
-        catch { return {}; }
-      })();
 
-      // 1. Water History
       if (currentGlasses > 0) {
         setHistory(prev => ({ ...(prev || {}), [lastDateStr]: currentGlasses }));
       }
       setGlasses(0);
       setLog([]);
-
-      // 2. Fitness History
-      const totalCalories = Object.values(currentMeals).flat().reduce((sum: number, item: any) => sum + (item.kcal || 0), 0);
-      if (totalCalories > 0) {
-        setFitHistory(prev => ({ ...(prev || {}), [lastDateStr]: totalCalories }));
-      }
-      setMeals({ Breakfast: [], Lunch: [], Dinner: [], Snacks: [] });
     };
 
     // Which day a session belongs to always follows the real calendar date (midnight
@@ -122,7 +107,7 @@ export const CalendarResetManager: React.FC = () => {
         firedPomoIshaMarkerRef.current = todayDateStr;
         window.localStorage.setItem('system_last_pomo_reset_date', JSON.stringify(todayDateStr));
         window.localStorage.setItem('system_last_pomo_reset_date_updatedAt', new Date().toISOString());
-        console.log(`[CalendarResetManager] Isha snapshot for: ${todayDateStr}`);
+        console.log(`[DailyResetManager] Isha snapshot for: ${todayDateStr}`);
 
         const todayIdx = dayIdxOf(now);
         const freshWeek = readFreshPomoWeek();
@@ -153,7 +138,7 @@ export const CalendarResetManager: React.FC = () => {
         const leftoverPomo = freshWeek[yesterdayIdx] || { sessions: 0, minutes: 0 };
 
         if (leftoverPomo.sessions > 0) {
-          console.log(`[CalendarResetManager] Merging post-Isha leftover into: ${yesterdayDateStr}`);
+          console.log(`[DailyResetManager] Merging post-Isha leftover into: ${yesterdayDateStr}`);
           setPomoHistory(prev => {
             const base = prev || {};
             const existing = base[yesterdayDateStr] || { sessions: 0, minutes: 0 };
@@ -183,7 +168,7 @@ export const CalendarResetManager: React.FC = () => {
 
     // Fixed schedule: sleep at 21:00 → reset trigger is 3h earlier, at 18:00.
     // Computed purely from the wall clock — no network fetch in the critical path,
-    // so a page refresh can never race an in-flight calendar request.
+    // so a page refresh can never race an in-flight request.
     const SLEEP_HOUR = 21;
     const RESET_HOUR = SLEEP_HOUR - 3; // 18:00
 
@@ -205,7 +190,7 @@ export const CalendarResetManager: React.FC = () => {
         const nowIso = new Date().toISOString();
         window.localStorage.setItem('system_last_reset_date', JSON.stringify(resetMarker));
         window.localStorage.setItem('system_last_reset_date_updatedAt', nowIso);
-        console.log(`[CalendarResetManager] Triggering reset for logical day: ${resetMarker}`);
+        console.log(`[DailyResetManager] Triggering reset for logical day: ${resetMarker}`);
         const sleepMoment = new Date(resetDateBase);
         sleepMoment.setHours(SLEEP_HOUR, 0, 0, 0);
         performReset(sleepMoment);
@@ -213,90 +198,9 @@ export const CalendarResetManager: React.FC = () => {
       }
     };
 
-    // Best-effort calendar fetch — purely informational (used only to cache the next
-    // sleep time), never gates the reset decision above. Throttled to once / 20 min.
-    const fetchNextSleepTime = async () => {
-      if (Date.now() - lastCalFetchAt < 20 * 60 * 1000) return;
-      lastCalFetchAt = Date.now();
-      try {
-        const text = await fetchICal(ICAL_URL);
-        const unfoldedText = text.replace(/\r?\n[ \t]/g, '');
-        const lines = unfoldedText.split(/\r?\n/);
-
-        let curr: any = { rrule: '' };
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-        const parseDate = (str: string) => {
-          if (!str) return null;
-          const cleanStr = str.replace(/[:;].*$/, '').trim();
-          if (cleanStr.length < 8) return null;
-          const y = parseInt(cleanStr.slice(0, 4));
-          const m = parseInt(cleanStr.slice(4, 6)) - 1;
-          const d = parseInt(cleanStr.slice(6, 8));
-          if (cleanStr.includes('T')) {
-            const h = parseInt(cleanStr.slice(9, 11));
-            const min = parseInt(cleanStr.slice(11, 13));
-            return new Date(y, m, d, h, min);
-          }
-          return new Date(y, m, d);
-        };
-
-        const parsedEvents: { start: Date, summary: string }[] = [];
-
-        for (let line of lines) {
-          if (line.startsWith('BEGIN:VEVENT')) {
-            curr = { rrule: '' };
-          } else if (line.startsWith('END:VEVENT')) {
-            const isSleep = curr.summary?.toLowerCase().includes('sleep') || curr.summary?.toLowerCase().includes('أسليب');
-            if (isSleep && curr.dtstart) {
-              const baseStart = parseDate(curr.dtstart);
-              if (baseStart) {
-                let untilDate = null;
-                if (curr.rrule.includes('UNTIL=')) {
-                  const match = curr.rrule.match(/UNTIL=([0-9T]+Z?)/);
-                  if (match) untilDate = parseDate(match[1]);
-                }
-
-                const addIfMatches = (offsetDays: number) => {
-                  if (untilDate && untilDate.getTime() < today.getTime()) return;
-                  const instStart = new Date(baseStart.getTime());
-                  const targetDate = new Date(today);
-                  targetDate.setDate(targetDate.getDate() + offsetDays);
-                  instStart.setFullYear(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-                  parsedEvents.push({ start: instStart, summary: curr.summary });
-                };
-
-                if (curr.rrule.includes('FREQ=DAILY')) {
-                  addIfMatches(-1); // Yesterday's occurrence
-                  addIfMatches(0);  // Today's occurrence
-                  addIfMatches(1);  // Tomorrow's occurrence
-                } else {
-                  parsedEvents.push({ start: baseStart, summary: curr.summary });
-                }
-              }
-            }
-            curr = { rrule: '' };
-          } else if (line.startsWith('SUMMARY:')) curr.summary = line.substring(8);
-          else if (line.startsWith('DTSTART')) curr.dtstart = line.split(':')[1] || line.split(';')[1]?.split(':')[1];
-          else if (line.startsWith('RRULE:')) curr.rrule = line;
-        }
-
-        parsedEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
-
-        const upcomingEvent = parsedEvents.find(e => e.start > now);
-        if (upcomingEvent) {
-          localStorage.setItem('system_next_sleep_time', upcomingEvent.start.toISOString());
-        }
-      } catch (e) {
-        console.error('CalendarResetManager fetch error:', e);
-      }
-    };
-
     const runChecks = () => {
       checkReset();
       checkPomoReset();
-      fetchNextSleepTime();
     };
 
     const interval = setInterval(runChecks, 2 * 60 * 1000); // Check every 2 minutes
@@ -304,8 +208,8 @@ export const CalendarResetManager: React.FC = () => {
     return () => clearInterval(interval);
   }, [
     lastResetDate, lastPomoIshaResetDate, lastPomoMidnightResetDate,
-    setGlasses, setLog, setHistory, setMeals, setFitHistory, setLastResetDate, setLastPomoIshaResetDate, setLastPomoMidnightResetDate, setPomoSessions, setPomoWeek, setPomoHistory,
-    glassesReady, logReady, historyReady, mealsReady, fitHistoryReady, pomoReady, pomoWeekReady, pomoHistoryReady, lastResetDateReady, lastPomoIshaResetDateReady, lastPomoMidnightResetDateReady,
+    setGlasses, setLog, setHistory, setLastResetDate, setLastPomoIshaResetDate, setLastPomoMidnightResetDate, setPomoSessions, setPomoWeek, setPomoHistory,
+    glassesReady, logReady, historyReady, pomoReady, pomoWeekReady, pomoHistoryReady, lastResetDateReady, lastPomoIshaResetDateReady, lastPomoMidnightResetDateReady,
     prayerTimes
   ]);
 

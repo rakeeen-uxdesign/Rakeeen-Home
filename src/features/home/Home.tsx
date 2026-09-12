@@ -8,13 +8,12 @@ import { auth } from '@/data/firebase';
 import { usePomodoro } from '@/features/focus/usePomodoro';
 import { AppModal } from '@/ui/AppModal';
 import { getLogicalDate } from '@/domain/day';
-import { usePrayer } from '@/features/devotion/usePrayer';
-import { useSleepLock } from '@/features/devotion/useSleepLock';
+import { usePrayer } from '@/data/usePrayer';
+import { useSleepLock } from '@/data/useSleepLock';
 import { DotMatrixText } from '@/ui/DotMatrixText';
 import { DMTimer, WavyProgressBar } from '@/features/focus/TimerComponents';
 import {
-  MaskedValue, SidebarActiveVector, WaterVector, FocusVector, CalendarVector,
-  PrayerVector, FinanceVector, FitnessVector, MonthFingerprint,
+  MaskedValue, SidebarActiveVector, WaterVector, FocusVector, FinanceVector, MonthFingerprint,
 } from '@/features/home/components/visuals';
 
 interface HomeProps {
@@ -22,7 +21,7 @@ interface HomeProps {
 }
 
 // Persists last active card so remount starts on the correct card instantly
-let _lastActiveCardId: 'water' | 'pomodoro' | 'fitness' | 'devotion' | 'calendar' | 'finance' = 'water';
+let _lastActiveCardId: 'water' | 'pomodoro' | 'finance' = 'water';
 // Persists greeting name so it doesn't change on every remount
 const _NAMES = ['Hamed', 'Ghorab', 'Shahyn', 'Rakeeen'];
 let _persistedGreetingName = _NAMES[Math.floor(Math.random() * _NAMES.length)];
@@ -30,16 +29,15 @@ let _persistedGreetingName = _NAMES[Math.floor(Math.random() * _NAMES.length)];
 
 
 export const Home: React.FC<HomeProps> = ({ navigate }) => {
-  const [activeCardId, setActiveCardId] = useState<'water' | 'pomodoro' | 'fitness' | 'devotion' | 'calendar' | 'finance'>(() => _lastActiveCardId);
-  const [displayedCardId, setDisplayedCardId] = useState<'water' | 'pomodoro' | 'fitness' | 'devotion' | 'calendar' | 'finance'>(() => _lastActiveCardId);
+  const [activeCardId, setActiveCardId] = useState<'water' | 'pomodoro' | 'finance'>(() => _lastActiveCardId);
+  const [displayedCardId, setDisplayedCardId] = useState<'water' | 'pomodoro' | 'finance'>(() => _lastActiveCardId);
   const [bigCardVisible, setBigCardVisible] = useState(false);
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
   const [lastManualClickTime, setLastManualClickTime] = useState<number>(0);
   // systemCardId tracks which card has system priority — independent of what user is viewing
-  const [systemCardId, setSystemCardId] = useState<'water' | 'pomodoro' | 'fitness' | 'devotion' | 'calendar' | 'finance' | null>(null);
+  const [systemCardId, setSystemCardId] = useState<'water' | 'pomodoro' | 'finance' | null>(null);
   const [avatarUrl, setAvatarUrl] = useFirebaseSync<string | null>('avatar_url', null);
   const [glasses, setGlasses] = useFirebaseSync<number>('hydration_glasses', 0);
-  const [workouts] = useFirebaseSync<any[]>('fitness_workouts', []);
   const [financeBanks] = useFirebaseSync<Record<string, number>>('finance_banks', {});
   const [dailyHistory, setDailyHistory, dailyHistoryReady] = useFirebaseSync<Record<string, { water: number; focus: number; workout: number }>>('daily_history', {});
   const [dailyJournal, setDailyJournal] = useFirebaseSync<Record<string, string>>('daily_journal', {});
@@ -71,11 +69,12 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
     localStorage.setItem('boomy_aug_patch_v1', '1');
   }, [dailyHistoryReady, hydrationHistory, pomoHistory]);
   const totalPhysical = Object.values(financeBanks).reduce((a, b) => a + (Number(b) || 0), 0);
-  
-  const workoutMinsToday = workouts
-    .filter(w => w.date === getLogicalDate().toDateString())
-    .reduce((a, b) => a + (Number(b.duration) || 0), 0);
-    
+
+  // Fitness/workout tracking removed (2026-09) — a separate food+workout system is
+  // planned. dailyHistory keeps the `workout` field for existing historical records;
+  // new days just record 0.
+  const workoutMinsToday = 0;
+
   const {
     weekStats,
     todayIdx,
@@ -122,7 +121,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
     if (days.length < 3) return 'neutral';
 
     const score = (d: { water: number; focus: number; workout: number }) =>
-      (d.water >= 8 ? 1 : 0) + (d.focus >= 30 ? 1 : 0) + (d.workout > 0 ? 1 : 0);
+      (d.water >= 8 ? 1 : 0) + (d.focus >= 30 ? 1 : 0);
 
     const recent = days.slice(0, 3).map(score);
     const older  = days.slice(3).map(score);
@@ -343,9 +342,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
     // water in that window makes no sense since adding more isn't even possible.
     const waterLow = typeof glasses === 'number' && glasses < 3 && h >= 10 && h < 18;
     const noFocus = focusMinutes === 0 && !pomodoroRunning && h >= 13 && h < 19;
-    // Training/Fitness is temporarily hidden system-wide — this condition is disabled to match.
-    const noWorkout = false;
-    const hasPending = false;
 
     let before = '';
     if (isSleepTime)         before = SLEEP_TEASE_LINES[Math.floor(now.getMinutes() / 15) % SLEEP_TEASE_LINES.length];
@@ -355,8 +351,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
     else if (weekPattern === 'fading')  before = 'HAWK HAS BEEN DRIFTING ... COME BACK ';
     else if (waterLow)       before = 'RIVER IS LOW TODAY ... DRINK UP ';
     else if (noFocus)        before = 'HAWK HASN\'T MOVED YET ... ';
-    else if (hasPending)     before = 'SOMETHING IS WAITING ... ';
-    else if (noWorkout)      before = 'LION DIDN\'T HUNT TODAY ... ';
     else if (isFriday)       before = 'JUMU\'AH MUBARAK ... READ YOUR KAHF ';
     else if (h >= 0  && h < 4)  before = 'DEEP NIGHT ... REST WELL ';
     else if (h >= 4  && h < 5)  before = 'FAJR HOUR ... THE BEST START ';
@@ -413,95 +407,26 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   const timeString = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
   const [timeOnly, amPm] = timeString.split(' ');
   
-  const { times, nextPrayer, loading: prayerLoading } = usePrayer();
+  // `times` still drives the real Fajr-based water lock below; the "Devotion" card/page
+  // and its next-prayer display were removed (2026-09) — you don't need the app to tell
+  // you when to pray.
+  const { times } = usePrayer();
 
-  const getCardPrayerInfo = () => {
-    if (prayerLoading || !times || Object.keys(times).length === 0) {
-      return { name: 'PRAYER', info: 'LOADING...' };
-    }
-    
-    const prayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-    let activePrayer = null;
-    
-    for (const name of prayerNames) {
-      const timeStr = times[name];
-      if (!timeStr) continue;
-      const [h, m] = timeStr.split(':').map(Number);
-      const pDate = new Date(now);
-      pDate.setHours(h, m, 0, 0);
-      const diffMins = (now.getTime() - pDate.getTime()) / 60000;
-      if (diffMins >= 0 && diffMins <= 15) {
-        activePrayer = name;
-        break;
-      }
-    }
-    
-    if (activePrayer) {
-      return {
-        name: activePrayer,
-        info: 'ACTIVE NOW'
-      };
-    }
-    
-    if (nextPrayer) {
-      const timeStr = nextPrayer.time;
-      let infoStr = '';
-      if (timeStr) {
-        let [h, m] = timeStr.split(':').map(Number);
-        const suffix = h >= 12 ? 'PM' : 'AM';
-        h = h % 12 || 12;
-        infoStr = `ATHAN AT ${h}:${String(m).padStart(2, '0')} ${suffix}`;
-      } else {
-        infoStr = 'UPCOMING';
-      }
-      return {
-        name: nextPrayer.name,
-        info: infoStr
-      };
-    }
-    
-    return { name: 'PRAYER', info: 'NO DATA' };
-  };
-
-  const cardPrayer = getCardPrayerInfo();
-  
   // Format English Date
   const dateStringEn = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  // Smart active card prioritizing logic based on real-time activity
+  // Smart active card prioritizing logic — the only thing that can claim system
+  // priority over Water now is an active/overtime focus session.
   useEffect(() => {
-    const getNextPrayerCloseness = () => {
-      if (!nextPrayer || !nextPrayer.time) return false;
-      const [h, m] = nextPrayer.time.split(':').map(Number);
-      const pDate = new Date(now);
-      pDate.setHours(h, m, 0, 0);
-      if (pDate.getTime() < now.getTime()) {
-        pDate.setDate(pDate.getDate() + 1);
-      }
-      const diffMins = (pDate.getTime() - now.getTime()) / 60000;
-      return diffMins > 0 && diffMins <= 15;
-    };
-
-    const isPrayerActiveOrClose = cardPrayer.info === 'ACTIVE NOW' || getNextPrayerCloseness();
-
-    // Determine which card has real system priority (not just default)
-    let priorityCardId: 'pomodoro' | 'devotion' | null = null;
-    if (pomodoroRunning || pomodoroOvertime) {
-      priorityCardId = 'pomodoro';
-    } else if (isPrayerActiveOrClose) {
-      priorityCardId = 'devotion';
-    }
+    const priorityCardId: 'pomodoro' | null = (pomodoroRunning || pomodoroOvertime) ? 'pomodoro' : null;
 
     // systemCardId tracks the priority card — always updated, user interaction doesn't clear it
     setSystemCardId(priorityCardId ?? 'water');
 
     const targetCardId = priorityCardId ?? 'water';
 
-    // First reveal: wait until prayer data is ready (nextPrayer computed from localStorage or API)
-    // This ensures we show the CORRECT card on first paint — no flash of Water before switching
+    // First reveal
     if (!firstRevealDoneRef.current) {
-      const prayerDataReady = nextPrayer !== null || Object.keys(times).length === 0;
-      if (!prayerDataReady) return; // wait one more tick
       firstRevealDoneRef.current = true;
       _lastActiveCardId = targetCardId;
       setDisplayedCardId(targetCardId);
@@ -518,9 +443,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   }, [
     pomodoroRunning,
     pomodoroOvertime,
-    cardPrayer.info,
-    nextPrayer,
-    now,
     lastManualClickTime,
     activeCardId
   ]);
@@ -529,8 +451,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   // Vector emotional states
   const waterFillLevel = Math.min(1, (glasses || 0) / 12);
   const focusPaused = false;
-  const fitnessPaused = workoutMinsToday > 0;
-  const prayerPaused = false;
 
   // Day is archived/reset at 18:00 (6pm) and reopens at the real Fajr time (from the prayer
   // API, refreshed daily) — locked in between. Falls back to 4:00 AM if prayer times haven't
@@ -660,25 +580,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
               subText: pomodoroRunning || pomodoroOvertime ? (pomodoroOvertime ? 'OVERTIME' : mode.toUpperCase()) : 'FOCUSED TODAY',
             },
             {
-              id: 'calendar',
-              title: 'Calendar',
-              Vector: CalendarVector,
-              route: 'calendar',
-              isRunning: false,
-              metric: `${now.getDate()} ${now.toLocaleDateString('en-US', { month: 'short' })}`,
-              subText: now.toLocaleDateString('en-US', { weekday: 'long' }),
-            },
-            {
-              id: 'devotion',
-              title: 'Devotion',
-              Vector: PrayerVector,
-              route: 'devotion',
-              isRunning: cardPrayer.info === 'ACTIVE NOW',
-              metric: cardPrayer.name,
-              subText: cardPrayer.info,
-            },
-            // Training/Fitness card temporarily hidden system-wide (see below too)
-            {
               id: 'finance',
               title: 'Finance',
               Vector: FinanceVector,
@@ -738,8 +639,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                       <Vector
                         {...(card.id === 'water' ? { fillLevel: waterFillLevel } : {})}
                         {...(card.id === 'pomodoro' ? { paused: focusPaused } : {})}
-                        {...(card.id === 'fitness' ? { paused: fitnessPaused } : {})}
-                        {...(card.id === 'devotion' ? { paused: prayerPaused } : {})}
                       />
                     </div>
                   )}
@@ -771,9 +670,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
               const found = [
                 { id: 'pomodoro', route: 'pomodoro' },
                 { id: 'water', route: 'water' },
-                { id: 'fitness', route: 'fitness' },
-                { id: 'devotion', route: 'devotion' },
-                { id: 'calendar', route: 'calendar' },
                 { id: 'finance', route: 'finance' },
               ].find(c => c.id === activeCardId);
               if (found) navigate(found.route);
@@ -888,65 +784,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                 </div>
               )}
 
-              {displayedCardId === 'fitness' && (
-                <div className="flex-1 flex flex-col justify-between">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mt-1" >{`TRAINING`}</h2>
-                    </div>
-                    <div className="text-ink">
-                      <FitnessVector size={36} paused={fitnessPaused} />
-                    </div>
-                  </div>
-
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-mono-main text-5xl sm:text-7xl lg:text-8xl font-black text-ink leading-none">
-                      {workoutMinsToday}
-                    </span>
-                    <span className="font-mono-main text-3xl font-bold text-ink/40">m</span>
-                    <span className="font-sans-main text-xs font-bold uppercase tracking-wider text-ink/60 ml-1">logged today</span>
-                  </div>
-                </div>
-              )}
-
-              {displayedCardId === 'devotion' && (
-                <div className="flex-1 flex flex-col justify-between">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mt-1" >{`DEVOTION`}</h2>
-                    </div>
-                    <div className="text-ink">
-                      <PrayerVector size={36} paused={prayerPaused} />
-                    </div>
-                  </div>
-
-                  <span className="font-sans-main text-4xl sm:text-5xl lg:text-6xl font-black text-ink uppercase tracking-tight">
-                    {cardPrayer.name}
-                  </span>
-                </div>
-              )}
-
-              {displayedCardId === 'calendar' && (
-                <div className="flex-1 flex flex-col justify-between">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mt-1" >{`CALENDAR`}</h2>
-                    </div>
-                    <div className="text-ink">
-                      <CalendarVector size={36} />
-                    </div>
-                  </div>
-
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-mono-main text-5xl sm:text-7xl lg:text-8xl font-black text-ink leading-none">
-                      {now.getDate()}
-                    </span>
-                    <span className="font-sans-main text-3xl font-bold text-ink/50 uppercase tracking-widest">
-                      {now.toLocaleDateString('en-US', { month: 'short' })}
-                    </span>
-                  </div>
-                </div>
-              )}
 
               {displayedCardId === 'finance' && (
                 <div className="flex-1 flex flex-col justify-between">

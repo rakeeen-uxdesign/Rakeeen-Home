@@ -2,21 +2,15 @@ import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { Home } from '@/features/home/Home';
 import { Water } from '@/features/water/Water';
-import { Calendar } from '@/features/calendar/Calendar';
 import { Pomodoro } from '@/features/focus/Pomodoro';
-import { Prayer } from '@/features/devotion/Prayer';
-import { Fitness } from '@/features/fitness/Fitness';
 import { Finance } from '@/features/finance/Finance';
-import { QuranReader } from '@/features/devotion/QuranReader';
 import { Login } from '@/features/auth/Login';
 import { TouchIDGate } from '@/features/auth/TouchIDGate';
 import { CustomCursor } from '@/ui/CustomCursor';
 import { FloatingTimer } from '@/features/focus/FloatingTimer';
-import { FloatingRadioButton } from '@/features/devotion/FloatingRadioButton';
 import { AuthProvider, useAuth } from '@/features/auth/useAuth';
 import { PomodoroProvider } from '@/features/focus/usePomodoro';
-import { FastingManager } from '@/features/fitness/FastingManager';
-import { CalendarResetManager } from '@/features/calendar/CalendarResetManager';
+import { DailyResetManager } from '@/app/DailyResetManager';
 import { DeviceCodeBanner } from '@/features/auth/DeviceCodeBanner';
 import { motion, AnimatePresence } from 'framer-motion';
 import '@/styles/global.css';
@@ -75,18 +69,13 @@ const AppRoutes: React.FC = () => {
   return (
     <div className="min-h-screen overflow-x-hidden">
       <CustomCursor />
-      <FastingManager />
-      <CalendarResetManager />
+      <DailyResetManager />
 
       <AnimatePresence mode="wait">
         <Routes>
           <Route path="/" element={<AnimatedPage><Home navigate={nav} /></AnimatedPage>} />
           <Route path="/water" element={<AnimatedPage><Water navigate={nav} /></AnimatedPage>} />
-          <Route path="/calendar" element={<AnimatedPage><Calendar navigate={nav} /></AnimatedPage>} />
           <Route path="/pomodoro" element={<AnimatedPage><Pomodoro navigate={nav} /></AnimatedPage>} />
-          <Route path="/devotion" element={<AnimatedPage><Prayer navigate={nav} /></AnimatedPage>} />
-          <Route path="/quran" element={<AnimatedPage><QuranReader navigate={nav} /></AnimatedPage>} />
-          <Route path="/fitness" element={<AnimatedPage><Fitness navigate={nav} /></AnimatedPage>} />
           <Route path="/finance" element={<AnimatedPage><Finance navigate={nav} /></AnimatedPage>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -94,8 +83,6 @@ const AppRoutes: React.FC = () => {
 
       <FloatingTimer currentPage={currentPage} onNavigate={() => nav('pomodoro')} />
       <DeviceCodeBanner user={user} />
-
-      <FloatingRadioButton onNavigate={() => nav('devotion?tab=radio')} />
     </div>
   );
 };

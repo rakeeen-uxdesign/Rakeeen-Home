@@ -59,7 +59,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 
 
-  // Daily Reset handled by CalendarResetManager
+  // Daily Reset handled by DailyResetManager (src/app/)
 
   // Warn before leaving site while timer is running
   useEffect(() => {

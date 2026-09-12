@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { usePrayer } from '@/features/devotion/usePrayer';
+import { usePrayer } from '@/data/usePrayer';
 import { isSleepWindow } from '@/domain/devotion/prayer';
 
 /** True from the real Isha adhan until the next Fajr (see `isSleepWindow`). */

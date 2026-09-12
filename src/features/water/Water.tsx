@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useFirebaseSync } from '@/data/useFirebaseSync';
-import { usePrayer } from '@/features/devotion/usePrayer';
+import { usePrayer } from '@/data/usePrayer';
 import { niceTicks } from '@/lib/charts';
 import { ChartTooltip } from '@/ui/UIComponents';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Cell } from 'recharts';
