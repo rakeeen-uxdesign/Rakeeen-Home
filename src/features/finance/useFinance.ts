@@ -4,7 +4,6 @@ import type {
   FinanceBanks, FinanceBuckets, FinanceTransaction,
   GoldAsset, Subscription, FinanceLog, Debt,
 } from '@/domain/finance/types';
-import { computeSafeToSpend } from '@/domain/finance/safeToSpend';
 
 const DEFAULT_BANKS: FinanceBanks = { cib: 0, ahly_main: 0, ahly_meeza: 0, bm: 0 };
 const DEFAULT_BUCKETS: FinanceBuckets = { tawarr2: 0, mustaqbal: 0, basmala: 0, sadaqa: 0 };
@@ -45,10 +44,6 @@ export function useFinance() {
   const totalPhysical = (Object.values(banks) as number[]).reduce((a, b) => a + b, 0);
   const totalVirtual = (Object.values(buckets) as number[]).reduce((a, b) => a + b, 0);
 
-  // "Can I afford this?" — one number instead of doing the bank-minus-buckets-
-  // minus-bills math in your head. See domain/finance/safeToSpend.ts.
-  const safeToSpend = computeSafeToSpend({ banks, buckets, subscriptions: subscriptions || [], debts: debts || [] });
-
   const updateBankBalance = async (bankKey: keyof FinanceBanks, amount: number) => {
     await setBanks({ ...banks, [bankKey]: amount });
   };
@@ -76,7 +71,6 @@ export function useFinance() {
     transactions,
     totalPhysical,
     totalVirtual,
-    safeToSpend,
     gold,
     setGold,
     subscriptions,
