@@ -33,5 +33,9 @@ dist-ssr
 # Firebase
 .firebase
 
+# Backend runtime data (not source, regenerated at runtime)
+backend/subscriptions.json
+backend/gold_cache.json
+
 # Serena (local code-intelligence cache)
 .serena/

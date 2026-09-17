@@ -34,41 +34,6 @@ async function sendWebhookMessage(content) {
   }
 }
 
-// Fixed schedule: sleep 9:00 PM, wake 4:00 AM
-// DND = 3h before sleep (18:00) → 2h after wake (06:00)
-const MOCK_CALENDAR_TODAY = {
-  wakeUpTime: '04:00',
-  sleepTime:  '21:00'
-};
-
-/**
- * Helper to check if current time is within the "Do Not Disturb" window
- * DND Window: 3 hours before sleepTime UNTIL 2 hours after wakeUpTime
- */
-function isDoNotDisturb(currentTime) {
-  const [sleepHour, sleepMin] = MOCK_CALENDAR_TODAY.sleepTime.split(':').map(Number);
-  const [wakeHour, wakeMin] = MOCK_CALENDAR_TODAY.wakeUpTime.split(':').map(Number);
-
-  const currentHour = currentTime.getHours();
-  
-  // Calculate DND start (3 hours before sleep)
-  let dndStartHour = sleepHour - 3;
-  if (dndStartHour < 0) dndStartHour += 24;
-
-  // Calculate DND end (2 hours after wake)
-  let dndEndHour = wakeHour + 2;
-  if (dndEndHour >= 24) dndEndHour -= 24;
-
-  // Check if current hour falls inside DND window
-  if (dndStartHour < dndEndHour) {
-    // e.g. DND is 19:00 to 23:00 (not crossing midnight)
-    return currentHour >= dndStartHour && currentHour < dndEndHour;
-  } else {
-    // e.g. DND is 19:00 to 07:00 (crossing midnight)
-    return currentHour >= dndStartHour || currentHour < dndEndHour;
-  }
-}
-
 client.once('ready', async () => {
   console.log(`🤖 Discord Water Bot is online as ${client.user.tag}`);
   
@@ -76,49 +41,6 @@ client.once('ready', async () => {
   await seedSubscriptions();
 
   // (gold price scheduling moved to app.listen startup block)
-
-  // --- TEST MESSAGE (Runs immediately upon starting) ---
-  try {
-    console.log("⏳ Sending test message to verify connection...");
-    const channel = await client.channels.fetch(CHANNEL_ID);
-    if (channel) {
-      await channel.send('✅ **Test Message:** Water Tracker Bot is successfully connected and the 2-hour timer has started!');
-      console.log("✅ Test message sent successfully!");
-    } else {
-      await sendWebhookMessage('✅ **Test Message (Webhook Fallback):** Webhook is successfully connected!');
-    }
-  } catch (error) {
-    console.log("Bot channel fetch failed, falling back to webhook for test message...");
-    await sendWebhookMessage('✅ **Test Message (Webhook Fallback):** Webhook is successfully connected!');
-  }
-  // -----------------------------------------------------
-
-  // Schedule a cron job to run at the top of every hour (first run at 1:00 PM)
-  cron.schedule('0 * * * *', async () => {
-    const now = new Date();
-    
-    // Check our smart Calendar logic before sending
-    if (isDoNotDisturb(now)) {
-      console.log(`[${now.toLocaleTimeString()}] DND Mode Active (Near sleep time). Skipping water notification.`);
-      return;
-    }
-
-    try {
-      const channel = await client.channels.fetch(CHANNEL_ID);
-      if (channel) {
-        await channel.send('💧 **حان وقت شرب الماء!**\nحافظ على رطوبة جسمك ولا تنسَ إضافة الكوب في لوحة التحكم (Rakeeen Dashboard).');
-        console.log(`[${now.toLocaleTimeString()}] Notification sent via Bot Client!`);
-      } else {
-        await sendWebhookMessage('💧 **حان وقت شرب الماء!**\nحافظ على رطوبة جسمك ولا تنسَ إضافة الكوب في لوحة التحكم (Rakeeen Dashboard).');
-        console.log(`[${now.toLocaleTimeString()}] Notification sent via Webhook!`);
-      }
-    } catch (error) {
-      await sendWebhookMessage('💧 **حان وقت شرب الماء!**\nحافظ على رطوبة جسمك ولا تنسَ إضافة الكوب في لوحة التحكم (Rakeeen Dashboard).');
-      console.log(`[${now.toLocaleTimeString()}] Notification sent via Webhook!`);
-    }
-  });
-  
-  console.log('⏰ Water Reminder Cron Job Scheduled (Runs every hour)!');
 
   // Daily cleanup cron job at 2:00 AM
   cron.schedule('0 2 * * *', async () => {
@@ -200,7 +122,7 @@ client.once('ready', async () => {
 });
 
 client.login(BOT_TOKEN).catch(err => {
-  console.error("❌ Failed to login. Please make sure you put a valid BOT_TOKEN in the .env file.");
+  console.error("❌ Failed to login:", err.message);
 });
 
 // ============================================================

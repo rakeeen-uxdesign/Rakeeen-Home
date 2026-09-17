@@ -49,6 +49,25 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const todayIdx = getPomoTodayIdx();
   const timerRef = useRef<any>(null);
 
+  // Checkpoint of the in-progress timer, so a reload/crash mid-session doesn't
+  // silently lose everything since the last completed session (see incident:
+  // ~5h of focus lost because nothing is persisted until "take a break"/"save").
+  const [checkpoint, setCheckpoint] = useFirebaseSync<{
+    timeLeft: number; overtime: number; isOvertime: boolean; running: boolean; mode: 'focus' | 'break';
+  } | null>('pomodoro_checkpoint', null);
+  const hydratedFromCheckpoint = useRef(false);
+
+  useEffect(() => {
+    if (hydratedFromCheckpoint.current) return;
+    hydratedFromCheckpoint.current = true;
+    if (!checkpoint) return;
+    setTimeLeft(checkpoint.timeLeft);
+    setOvertime(checkpoint.overtime);
+    setIsOvertime(checkpoint.isOvertime);
+    setMode(checkpoint.mode);
+    setRunning(checkpoint.running);
+  }, [checkpoint]);
+
   const setFocusDuration = useCallback((m: number) => {
     // Hardcoded default 25 minutes, ignoring changes
   }, []);
@@ -165,6 +184,25 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [running, mode, isOvertime, sendDiscordNotification, FOCUS, focusDuration]);
 
+  // Periodic + on-hide checkpoint: keeps `pomodoro_checkpoint` in sync with the
+  // live timer so a reload/crash restores from here instead of losing progress.
+  const checkpointStateRef = useRef({ timeLeft, overtime, isOvertime, running, mode });
+  useEffect(() => {
+    checkpointStateRef.current = { timeLeft, overtime, isOvertime, running, mode };
+  }, [timeLeft, overtime, isOvertime, running, mode]);
+
+  useEffect(() => {
+    if (!running) return;
+    const writeCheckpoint = () => setCheckpoint({ ...checkpointStateRef.current });
+    const intervalId = setInterval(writeCheckpoint, 45000);
+    const onVisibilityChange = () => { if (document.visibilityState === 'hidden') writeCheckpoint(); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [running, setCheckpoint]);
+
   const start = useCallback(() => setRunning(true), []);
   const pause = useCallback(() => setRunning(false), []);
 
@@ -175,7 +213,8 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setOvertime(0);
     setMode('focus');
     setTimeLeft(FOCUS);
-  }, [FOCUS]);
+    setCheckpoint(null);
+  }, [FOCUS, setCheckpoint]);
 
   const startBreak = useCallback(() => {
     const focusGained = focusDuration + Math.floor(overtime / 60);
