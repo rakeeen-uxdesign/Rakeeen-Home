@@ -798,13 +798,15 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
 
                   <div className="flex items-end gap-4">
                     <div className="flex items-baseline gap-2">
-                      <span className="font-mono-main text-4xl sm:text-5xl lg:text-6xl font-black text-ink leading-none">
-                        {totalPhysical > 0
-                          ? <MaskedValue>{Math.round(totalPhysical).toLocaleString()}</MaskedValue>
-                          : '—'}
-                      </span>
-                      {totalPhysical > 0 && (
-                        <span className="font-mono-main text-2xl font-bold text-ink/40">EGP</span>
+                      {totalPhysical > 0 ? (
+                        <MaskedValue>
+                          <span className="font-mono-main text-4xl sm:text-5xl lg:text-6xl font-black text-ink leading-none">
+                            {Math.round(totalPhysical).toLocaleString()}
+                          </span>
+                          <span className="font-mono-main text-2xl font-bold text-ink/40 ml-2">EGP</span>
+                        </MaskedValue>
+                      ) : (
+                        <span className="font-mono-main text-4xl sm:text-5xl lg:text-6xl font-black text-ink leading-none">—</span>
                       )}
                     </div>
                   </div>
