@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getLogicalDate, getTodayIdx, getPomoTodayIdx, getPomoLogicalDate } from '@/domain/day';
+import { getLogicalDate, getTodayIdx, getPomoTodayIdx, getPomoLogicalDate, isFriday } from '@/domain/day';
 
 // A Wednesday: 2026-09-09
 const wedMorning = new Date('2026-09-09T09:00:00');
@@ -40,5 +40,15 @@ describe('getPomoTodayIdx — real calendar day, no rollback', () => {
   });
   it('getPomoLogicalDate just echoes the moment', () => {
     expect(getPomoLogicalDate(wedMorning).getTime()).toBe(wedMorning.getTime());
+  });
+});
+
+describe('isFriday', () => {
+  it('true on a Friday', () => {
+    expect(isFriday(new Date('2026-09-11T09:00:00'))).toBe(true);
+  });
+  it('false on other days', () => {
+    expect(isFriday(wedMorning)).toBe(false);
+    expect(isFriday(sunday)).toBe(false);
   });
 });

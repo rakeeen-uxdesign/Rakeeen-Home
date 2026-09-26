@@ -65,10 +65,42 @@ The repo has pre-existing eslint warnings/tsc errors that predate this guide —
 - `src/lib/firebase.ts` forces `experimentalForceLongPolling` — that's the actual
   fix for the crash above. Don't revert it "to try WebSockets".
 
+## Icon system
+
+**Sharp, not rounded, is a deliberate identity choice** — it matches the
+brutalist card/border language everywhere else (hard edges, no soft corners).
+It lives entirely in `src/ui/icons.tsx`, the **only** file allowed to import
+from `@hugeicons/core-free-icons` (raw path data — `@hugeicons/react` isn't a
+dependency at all; we render the paths ourselves). Three exported constants
+are the whole system:
+
+- `ICON_STROKE_WIDTH` (2)
+- `ICON_STROKE_LINECAP` (`'square'`)
+- `ICON_STROKE_LINEJOIN` (`'miter'`)
+
+`createIcon()` applies all three to every icon, overriding Hugeicons' own
+rounded defaults. Features import icons from `@/ui/icons` (`Icon<Name>`),
+never from an icon library directly — so the library, the stroke width, and
+the sharp-vs-rounded choice are each a one-line edit instead of a
+find-and-replace across every screen. New icon → add it to `icons.tsx` first.
+
+A hand-drawn icon that can't go through `createIcon()` (its own component, not
+a static Hugeicons path set) still **imports these same three constants**
+instead of hardcoding its own numbers — see the TouchID fingerprint glyph
+(`TouchIDGate.tsx`) for the pattern. Genuine exceptions, with their own
+hand-tuned stroke unrelated to this system: the Pomodoro focus ring (scales
+with its own size), Recharts chart internals, the `MonthFingerprint` dot
+weight (encodes a data value), and `CustomCursor`'s shape outline.
+
 ## Don't
 
 - Don't add a new top-level folder under `src/` without updating
   `docs/ARCHITECTURE.md`.
+- Don't import an icon from any icon library directly in a feature file —
+  add it to `src/ui/icons.tsx` and import it from `@/ui/icons`.
+- Don't hardcode `strokeLinecap`/`strokeLinejoin`/a stroke-width number on any
+  hand-drawn icon-like SVG — import `ICON_STROKE_LINECAP` /
+  `ICON_STROKE_LINEJOIN` / `ICON_STROKE_WIDTH` from `@/ui/icons` instead.
 - Don't put a Firestore call inside a `features/` component — go through
   `useFirebaseSync`.
 - Don't reach into another feature's folder (`features/water/` importing from

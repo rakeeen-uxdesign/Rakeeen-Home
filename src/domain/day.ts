@@ -41,3 +41,8 @@ export function getPomoLogicalDate(now: Date = new Date()): Date {
 export function getPomoTodayIdx(now: Date = new Date()): number {
   return mondayFirstIndex(getPomoLogicalDate(now));
 }
+
+/** Whether `now` falls on a Friday (JS `getDay()` has Fri = 5). */
+export function isFriday(now: Date = new Date()): boolean {
+  return now.getDay() === 5;
+}

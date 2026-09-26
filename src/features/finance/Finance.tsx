@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Banknote, Wallet, Trash2, Plus, Minus, Pencil } from 'lucide-react';
+import {
+  IconArrowLeft as ArrowLeft, IconBanknote as Banknote, IconWallet as Wallet, IconTrash2 as Trash2,
+  IconPlus as Plus, IconMinus as Minus, IconPencil as Pencil,
+} from '@/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppModal } from '@/ui/AppModal';
 import { useFinance } from '@/features/finance/useFinance';

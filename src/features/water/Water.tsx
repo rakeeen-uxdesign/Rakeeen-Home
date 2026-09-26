@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { useFirebaseSync } from '@/data/useFirebaseSync';
 import { usePrayer } from '@/data/usePrayer';
+import { useFridayGate } from '@/data/useFridayGate';
 import { niceTicks } from '@/lib/charts';
 import { ChartTooltip } from '@/ui/UIComponents';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Cell } from 'recharts';
-import { RotateCcw, Undo2, Plus, ArrowLeft, ChevronRight } from 'lucide-react';
+import {
+  IconRotateCcw as RotateCcw, IconUndo2 as Undo2, IconPlus as Plus,
+  IconArrowLeft as ArrowLeft, IconChevronRight as ChevronRight,
+} from '@/ui/icons';
 import { motion } from 'framer-motion';
 import { DotMatrixText } from '@/ui/DotMatrixText';
 
@@ -39,9 +43,11 @@ export const Water: React.FC<WaterProps> = ({ navigate }) => {
   const todaySixPm = new Date(now);
   todaySixPm.setHours(18, 0, 0, 0);
   const isLocked = now >= todaySixPm || now < todayFajr;
+  const { friday, includedToday, includeToday } = useFridayGate(now);
+  const fridayLocked = friday && !includedToday;
 
   const addGlass = () => {
-    if (isLocked) return;
+    if (isLocked || fridayLocked) return;
     const now = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     setLog([...log, now]);
     setGlasses(glasses + 1);
@@ -167,14 +173,23 @@ export const Water: React.FC<WaterProps> = ({ navigate }) => {
           </div>
 
           <div className="flex flex-col gap-3 min-w-[180px]">
-            <button
-              onClick={addGlass}
-              disabled={isLocked}
-              className="btn-brutalist flex items-center justify-center gap-2 w-full py-4 text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <Plus size={16} strokeWidth={3} />
-              Add Glass
-            </button>
+            {fridayLocked ? (
+              <button
+                onClick={includeToday}
+                className="btn-brutalist flex items-center justify-center gap-2 w-full py-4 text-sm text-center leading-snug"
+              >
+                It's Jumu'ah — count today anyway?
+              </button>
+            ) : (
+              <button
+                onClick={addGlass}
+                disabled={isLocked}
+                className="btn-brutalist flex items-center justify-center gap-2 w-full py-4 text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Plus size={16} />
+                Add Glass
+              </button>
+            )}
             <div
               className={`flex gap-2 transition-all duration-200 ${glasses > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none invisible'}`}
               style={{ visibility: glasses > 0 ? 'visible' : 'hidden' }}

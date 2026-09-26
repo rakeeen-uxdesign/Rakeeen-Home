@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
+import { IconChevronDown } from '@/ui/icons';
 
 interface Option {
   value: string;
@@ -55,10 +54,9 @@ export const CustomSelect: React.FC<SelectProps> = ({
         <span className={!selectedOption ? 'text-ink/30' : 'text-ink'}>
           {selectedOption ? selectedOption.label : placeholder}
         </span>
-        <HugeiconsIcon 
-          icon={ArrowDown01Icon} 
-          size={18} 
-          className={`transition-transform duration-300 ${isOpen ? 'rotate-180 text-forest' : 'text-ink/40'}`} 
+        <IconChevronDown
+          size={18}
+          className={`transition-transform duration-300 ${isOpen ? 'rotate-180 text-forest' : 'text-ink/40'}`}
         />
       </div>
 

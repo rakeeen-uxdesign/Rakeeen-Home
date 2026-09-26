@@ -2,7 +2,10 @@ import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFirebaseSync } from '@/data/useFirebaseSync';
 import { uploadImage } from '@/lib/cloudinary';
-import { Sun, Plus, Camera, MoreVertical, LogOut, Moon } from 'lucide-react';
+import {
+  IconSun as Sun, IconPlus as Plus, IconCamera as Camera, IconMoreVertical as MoreVertical,
+  IconLogOut as LogOut, IconMoon as Moon,
+} from '@/ui/icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/data/firebase';
 import { usePomodoro } from '@/features/focus/usePomodoro';
@@ -707,7 +710,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                       disabled={waterLocked}
                       className="btn-brutalist flex items-center gap-2 font-mono-main py-3 px-6 text-sm disabled:opacity-30 disabled:cursor-not-allowed"
                     >
-                      <Plus size={18} strokeWidth={3} />
+                      <Plus size={18} />
                       {waterLocked ? 'Reopens at Fajr' : 'Add Glass'}
                     </button>
                   </div>

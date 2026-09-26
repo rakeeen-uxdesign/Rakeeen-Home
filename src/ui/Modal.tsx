@@ -1,6 +1,5 @@
 import React from 'react';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Cancel01Icon } from '@hugeicons/core-free-icons';
+import { IconClose } from '@/ui/icons';
 
 interface ModalProps {
   isOpen: boolean;
@@ -44,7 +43,7 @@ export const Modal: React.FC<ModalProps> = ({
                 onClick={onClose} 
                 className="sketchy-btn px-4 py-2 hover:bg-rust hover:text-white hover:border-rust"
               >
-                <HugeiconsIcon icon={Cancel01Icon} size={20} strokeWidth={1.5} />
+                <IconClose size={20} />
               </button>
             </div>
           </div>

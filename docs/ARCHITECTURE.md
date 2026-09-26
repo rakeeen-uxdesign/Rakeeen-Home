@@ -120,6 +120,29 @@ tokens — they don't hardcode colors. When the visual design changes (Phase 4 o
 current redesign work), it changes in `global.css` + `ui/`, and every feature
 inherits it automatically instead of being edited screen by screen.
 
+**Icons** are their own small design system, all in one file:
+`src/ui/icons.tsx` is the only file that imports from
+`@hugeicons/core-free-icons` (raw path data — `@hugeicons/react` isn't a
+dependency; we render the paths ourselves). Three exported constants define
+the whole look — `ICON_STROKE_WIDTH` (2), `ICON_STROKE_LINECAP` (`'square'`),
+`ICON_STROKE_LINEJOIN` (`'miter'`) — and `createIcon()` applies all three to
+every icon, overriding Hugeicons' own rounded defaults. **Sharp, not rounded,
+is deliberate**: it matches the brutalist card/border language above, not an
+oversight. Features import icons from `@/ui/icons` as `Icon<Name>`, never
+straight from an icon library — that's what makes "which icons exist", "what
+library they're from", and "sharp vs rounded" each a one-file answer instead
+of a grep across every screen. New icon → add it to `icons.tsx` first.
+
+A hand-drawn icon-like SVG that can't be a static Hugeicons path set (its own
+component, e.g. the TouchID fingerprint glyph in `TouchIDGate.tsx`, a one-off
+animated scan effect) still imports these same three constants instead of
+hardcoding its own numbers, so it stays visually consistent with everything
+built through `createIcon()`. Genuine exceptions, with their own hand-tuned
+stroke unrelated to this system: the Pomodoro focus ring (scales with its own
+size), Recharts `ReferenceLine`/chart internals, the `MonthFingerprint` dot
+weight (encodes a data value, not a fixed style), and `CustomCursor`'s shape
+outline.
+
 ## Testing & commands
 
 ```

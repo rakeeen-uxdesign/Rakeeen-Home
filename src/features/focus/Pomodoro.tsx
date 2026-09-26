@@ -4,8 +4,12 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { formatTime } from '@/lib/format';
 import { niceTicks } from '@/lib/charts';
 import { ChartTooltip } from '@/ui/UIComponents';
-import { Play, Pause, RotateCcw, Maximize2, X, ArrowLeft, ChevronRight } from 'lucide-react';
+import {
+  IconPlay as Play, IconPause as Pause, IconRotateCcw as RotateCcw, IconMaximize2 as Maximize2,
+  IconX as X, IconArrowLeft as ArrowLeft, IconChevronRight as ChevronRight,
+} from '@/ui/icons';
 import { usePomodoro } from '@/features/focus/usePomodoro';
+import { useFridayGate } from '@/data/useFridayGate';
 import { DMTimer, WavyProgressBar } from '@/features/focus/TimerComponents';
 
 
@@ -117,6 +121,8 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
     focusDuration, breakDuration, setFocusDuration, setBreakDuration,
     start, pause, reset, startBreak, startNewSession, skipBreak, saveProgress
   } = usePomodoro();
+  const { friday, includedToday } = useFridayGate();
+  const fridayLocked = friday && !includedToday;
 
   const [view, setView] = React.useState<'week' | 'month' | 'year'>('week');
   const [phase, setPhase] = React.useState(0);
@@ -296,14 +302,15 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
           </button>
         ) : (
           <>
-            <button 
+            <button
               onClick={running ? pause : start}
-              className="w-12 h-12 border border-ink flex items-center justify-center transition-all bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 cursor-pointer animate-none"
-              title={running ? 'Pause' : 'Start'}
+              disabled={!running && fridayLocked}
+              className="w-12 h-12 border border-ink flex items-center justify-center transition-all bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 cursor-pointer animate-none disabled:opacity-30 disabled:cursor-not-allowed"
+              title={fridayLocked && !running ? "Include today from the Water page first" : running ? 'Pause' : 'Start'}
             >
               {running ? <Pause size={18} /> : <Play size={18} />}
             </button>
-            <button 
+            <button
               onClick={reset}
               className="w-12 h-12 border border-ink/20 flex items-center justify-center text-ink/30 hover:border-ink/60 hover:text-ink/60 transition-all cursor-pointer bg-transparent"
               title="Reset"
@@ -385,7 +392,9 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
               <div className="mt-10 flex items-center gap-4">
                 <button
                   onClick={running ? pause : start}
-                  className="w-14 h-14 border border-ink flex items-center justify-center bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 transition-all cursor-pointer"
+                  disabled={!running && fridayLocked}
+                  className="w-14 h-14 border border-ink flex items-center justify-center bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  title={fridayLocked && !running ? "Include today from the Water page first" : undefined}
                 >
                   {running ? <Pause size={20} /> : <Play size={20} />}
                 </button>

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '@/data/firebase';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { LockIcon, Login03Icon } from '@hugeicons/core-free-icons';
+import { IconLock, IconLogin, IconSun as Sun, IconMoon as Moon } from '@/ui/icons';
 
 export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -58,20 +57,16 @@ export const Login: React.FC = () => {
         title={isDark ? 'Switch to light' : 'Switch to dark'}
       >
         {isDark ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-ink/40 hover:text-ink transition-colors">
-            <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-          </svg>
+          <Sun size={18} className="text-ink/40 hover:text-ink transition-colors" />
         ) : (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-ink/40 hover:text-ink transition-colors">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-          </svg>
+          <Moon size={18} className="text-ink/40 hover:text-ink transition-colors" />
         )}
       </button>
       
       <div className="w-full max-w-md brutalist-card no-lift p-10 md:p-12 relative z-10 text-center">
         <div className="flex justify-center mb-8">
           <div className="w-14 h-14 bg-sepia/20 flex items-center justify-center border border-ink text-ink" style={{ borderRadius: 0 }}>
-            <HugeiconsIcon icon={LockIcon} size={28} strokeWidth={1.5} />
+            <IconLock size={28} />
           </div>
         </div>
         
@@ -94,7 +89,7 @@ export const Login: React.FC = () => {
              <div className="w-5 h-5 border-2 border-ink/30 border-t-ink rounded-full animate-spin" />
           ) : (
             <>
-              <HugeiconsIcon icon={Login03Icon} size={20} strokeWidth={1.5} />
+              <IconLogin size={20} />
               <span>CONTINUE WITH GOOGLE</span>
             </>
           )}

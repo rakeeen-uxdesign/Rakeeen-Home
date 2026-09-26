@@ -9,6 +9,7 @@ import {
   isBiometricSupported,
 } from '@/data/webauthn';
 import { requestDeviceCode, verifyDeviceCode } from '@/data/deviceAuth';
+import { ICON_STROKE_WIDTH, ICON_STROKE_LINECAP, IconSun as Sun, IconMoon as Moon } from '@/ui/icons';
 
 interface Props {
   user: User;
@@ -56,8 +57,8 @@ const FingerprintVector: React.FC<{ scanning?: boolean }> = ({ scanning = false 
             key={r}
             d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
             stroke="currentColor"
-            strokeWidth={1.4}
-            strokeLinecap="round"
+            strokeWidth={ICON_STROKE_WIDTH}
+            strokeLinecap={ICON_STROKE_LINECAP}
             fill="none"
             style={{
               ['--len' as any]: len,
@@ -188,13 +189,9 @@ export const TouchIDGate: React.FC<Props> = ({ user, onCleared }) => {
         title={isDark ? 'Switch to light' : 'Switch to dark'}
       >
         {isDark ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-ink/40 hover:text-ink transition-colors">
-            <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-          </svg>
+          <Sun size={18} className="text-ink/40 hover:text-ink transition-colors" />
         ) : (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-ink/40 hover:text-ink transition-colors">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-          </svg>
+          <Moon size={18} className="text-ink/40 hover:text-ink transition-colors" />
         )}
       </button>
 
