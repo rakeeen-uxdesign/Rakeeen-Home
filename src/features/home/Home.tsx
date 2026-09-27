@@ -13,6 +13,7 @@ import { AppModal } from '@/ui/AppModal';
 import { getLogicalDate } from '@/domain/day';
 import { usePrayer } from '@/data/usePrayer';
 import { useSleepLock } from '@/data/useSleepLock';
+import { useFridayGate } from '@/data/useFridayGate';
 import { DotMatrixText } from '@/ui/DotMatrixText';
 import { DMTimer, WavyProgressBar } from '@/features/focus/TimerComponents';
 import {
@@ -418,10 +419,30 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   // Format English Date
   const dateStringEn = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  // Smart active card prioritizing logic — the only thing that can claim system
-  // priority over Water now is an active/overtime focus session.
+  // Day is archived/reset at 18:00 (6pm) and reopens at the real Fajr time (from the prayer
+  // API, refreshed daily) — Water is locked in between. Falls back to 4:00 AM if prayer
+  // times haven't loaded yet. Computed here (not just below, near the water button) because
+  // the priority effect right below also needs it.
+  const [fajrH, fajrM] = (times?.Fajr || '04:00').split(':').map(Number);
+  const todayFajr = new Date(now);
+  todayFajr.setHours(fajrH, fajrM, 0, 0);
+  const todaySixPm = new Date(now);
+  todaySixPm.setHours(18, 0, 0, 0);
+  const waterLocked = now >= todaySixPm || now < todayFajr;
+  // New focus sessions can't be started between midnight and Fajr — same rule the
+  // Pomodoro page itself enforces (see Pomodoro.tsx's `nightLocked`); this mini "Start
+  // Focus" button is a second entry point into the same action, so it needs the same gate.
+  const focusNightLocked = now < todayFajr;
+  const { friday, includedToday } = useFridayGate(now);
+  const focusFridayLocked = friday && !includedToday;
+
+  // Smart active card prioritizing logic. An active/overtime focus session always wins.
+  // Otherwise the default is Water — except while Water itself is locked (6pm–Fajr),
+  // when defaulting to it would just show a card you can't do anything with, so Focus
+  // takes over as the default for that whole window instead.
   useEffect(() => {
-    const priorityCardId: 'pomodoro' | null = (pomodoroRunning || pomodoroOvertime) ? 'pomodoro' : null;
+    const priorityCardId: 'pomodoro' | null =
+      (pomodoroRunning || pomodoroOvertime || waterLocked) ? 'pomodoro' : null;
 
     // systemCardId tracks the priority card — always updated, user interaction doesn't clear it
     setSystemCardId(priorityCardId ?? 'water');
@@ -438,14 +459,15 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
       return;
     }
 
-    // Subsequent auto-selects: only if user hasn't manually clicked in 3 min
-    if (Date.now() - lastManualClickTime < 180000) return;
+    // Subsequent auto-selects: only if user hasn't manually clicked in 1 min
+    if (Date.now() - lastManualClickTime < 60000) return;
     if (activeCardId !== targetCardId) {
       setActiveCardId(targetCardId);
     }
   }, [
     pomodoroRunning,
     pomodoroOvertime,
+    waterLocked,
     lastManualClickTime,
     activeCardId
   ]);
@@ -454,16 +476,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   // Vector emotional states
   const waterFillLevel = Math.min(1, (glasses || 0) / 12);
   const focusPaused = false;
-
-  // Day is archived/reset at 18:00 (6pm) and reopens at the real Fajr time (from the prayer
-  // API, refreshed daily) — locked in between. Falls back to 4:00 AM if prayer times haven't
-  // loaded yet.
-  const [fajrH, fajrM] = (times?.Fajr || '04:00').split(':').map(Number);
-  const todayFajr = new Date(now);
-  todayFajr.setHours(fajrH, fajrM, 0, 0);
-  const todaySixPm = new Date(now);
-  todaySixPm.setHours(18, 0, 0, 0);
-  const waterLocked = now >= todaySixPm || now < todayFajr;
 
   const addWaterCup = (e: React.MouseEvent) => {
     e.stopPropagation(); // Avoid triggering card navigation
@@ -773,13 +785,15 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                         </div>
 
                         <button
-                          onClick={(e) => { e.stopPropagation(); pomodoroStart(); }}
-                          className="btn-brutalist shrink-0 flex items-center gap-2 px-5 py-3 text-sm"
+                          onClick={(e) => { e.stopPropagation(); if (!focusNightLocked && !focusFridayLocked) pomodoroStart(); }}
+                          disabled={focusNightLocked || focusFridayLocked}
+                          title={focusNightLocked ? 'Reopens at Fajr' : focusFridayLocked ? 'Include today from the Water page first' : undefined}
+                          className="btn-brutalist shrink-0 flex items-center gap-2 px-5 py-3 text-sm disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
                             <polygon points="2,1 9,5 2,9" />
                           </svg>
-                          START FOCUS
+                          {focusNightLocked ? 'REOPENS AT FAJR' : 'START FOCUS'}
                         </button>
                       </div>
                     </>

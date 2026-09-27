@@ -19,7 +19,6 @@ interface WaterProps {
 
 export const Water: React.FC<WaterProps> = ({ navigate }) => {
   const [glasses, setGlasses] = useFirebaseSync<number>('hydration_glasses', 0);
-  const [log, setLog] = useFirebaseSync<string[]>('hydration_log', []);
   const [history] = useFirebaseSync<Record<string, number>>('hydration_history', {});
   const [reportView, setReportView] = useState<'week' | 'month' | 'year'>('week');
   const goal = 12;
@@ -48,22 +47,18 @@ export const Water: React.FC<WaterProps> = ({ navigate }) => {
 
   const addGlass = () => {
     if (isLocked || fridayLocked) return;
-    const now = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    setLog([...log, now]);
     setGlasses(glasses + 1);
   };
 
   const reset = () => {
     if (isLocked) return;
     setGlasses(0);
-    setLog([]);
   };
 
   const undo = () => {
     if (isLocked) return;
     if (glasses <= 0) return;
     setGlasses(glasses - 1);
-    setLog(log.slice(0, -1));
   };
 
   // --- ANALYTICS ---

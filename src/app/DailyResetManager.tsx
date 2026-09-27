@@ -27,7 +27,6 @@ export const DailyResetManager: React.FC = () => {
   // destructured here — that keeps this component from re-running its effect on every
   // water sip / focus tick.
   const [, setGlasses, glassesReady] = useFirebaseSync<number>('hydration_glasses', 0);
-  const [, setLog, logReady] = useFirebaseSync<any[]>('hydration_log', []);
   const [, setHistory, historyReady] = useFirebaseSync<Record<string, number>>('hydration_history', {});
 
   const [, setPomoSessions, pomoReady] = useFirebaseSync<number>('pomodoro_sessions', 0);
@@ -42,7 +41,6 @@ export const DailyResetManager: React.FC = () => {
     // Wait until ALL Firebase sync hooks are ready before checking whether to reset
     if (
       !glassesReady ||
-      !logReady ||
       !historyReady ||
       !pomoReady ||
       !pomoWeekReady ||
@@ -74,7 +72,6 @@ export const DailyResetManager: React.FC = () => {
         setHistory(prev => ({ ...(prev || {}), [lastDateStr]: currentGlasses }));
       }
       setGlasses(0);
-      setLog([]);
     };
 
     // Which day a session belongs to always follows the real calendar date (midnight
@@ -208,8 +205,8 @@ export const DailyResetManager: React.FC = () => {
     return () => clearInterval(interval);
   }, [
     lastResetDate, lastPomoIshaResetDate, lastPomoMidnightResetDate,
-    setGlasses, setLog, setHistory, setLastResetDate, setLastPomoIshaResetDate, setLastPomoMidnightResetDate, setPomoSessions, setPomoWeek, setPomoHistory,
-    glassesReady, logReady, historyReady, pomoReady, pomoWeekReady, pomoHistoryReady, lastResetDateReady, lastPomoIshaResetDateReady, lastPomoMidnightResetDateReady,
+    setGlasses, setHistory, setLastResetDate, setLastPomoIshaResetDate, setLastPomoMidnightResetDate, setPomoSessions, setPomoWeek, setPomoHistory,
+    glassesReady, historyReady, pomoReady, pomoWeekReady, pomoHistoryReady, lastResetDateReady, lastPomoIshaResetDateReady, lastPomoMidnightResetDateReady,
     prayerTimes
   ]);
 

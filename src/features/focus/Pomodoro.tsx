@@ -10,6 +10,7 @@ import {
 } from '@/ui/icons';
 import { usePomodoro } from '@/features/focus/usePomodoro';
 import { useFridayGate } from '@/data/useFridayGate';
+import { usePrayer } from '@/data/usePrayer';
 import { DMTimer, WavyProgressBar } from '@/features/focus/TimerComponents';
 
 
@@ -123,6 +124,18 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
   } = usePomodoro();
   const { friday, includedToday } = useFridayGate();
   const fridayLocked = friday && !includedToday;
+
+  // New sessions can't be started between midnight and the real Fajr time (from the
+  // prayer API, refreshed daily) — mirrors Water's overnight lock, but Water's own
+  // window wraps past midnight (6pm→Fajr) while this one doesn't need to: a fresh
+  // Date() each render is always compared against *today's* Fajr instant, so this is
+  // true only for the midnight-to-Fajr slice of the current calendar day. Falls back
+  // to 4:00 AM if prayer times haven't loaded yet.
+  const { times: pomoTimes } = usePrayer();
+  const [pomoFajrH, pomoFajrM] = (pomoTimes?.Fajr || '04:00').split(':').map(Number);
+  const todayFajr = new Date();
+  todayFajr.setHours(pomoFajrH, pomoFajrM, 0, 0);
+  const nightLocked = new Date() < todayFajr;
 
   const [view, setView] = React.useState<'week' | 'month' | 'year'>('week');
   const [phase, setPhase] = React.useState(0);
@@ -304,9 +317,14 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
           <>
             <button
               onClick={running ? pause : start}
-              disabled={!running && fridayLocked}
+              disabled={!running && (fridayLocked || nightLocked)}
               className="w-12 h-12 border border-ink flex items-center justify-center transition-all bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 cursor-pointer animate-none disabled:opacity-30 disabled:cursor-not-allowed"
-              title={fridayLocked && !running ? "Include today from the Water page first" : running ? 'Pause' : 'Start'}
+              title={
+                running ? 'Pause'
+                : fridayLocked ? "Include today from the Water page first"
+                : nightLocked ? "Reopens at Fajr"
+                : 'Start'
+              }
             >
               {running ? <Pause size={18} /> : <Play size={18} />}
             </button>
@@ -392,9 +410,14 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
               <div className="mt-10 flex items-center gap-4">
                 <button
                   onClick={running ? pause : start}
-                  disabled={!running && fridayLocked}
+                  disabled={!running && (fridayLocked || nightLocked)}
                   className="w-14 h-14 border border-ink flex items-center justify-center bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                  title={fridayLocked && !running ? "Include today from the Water page first" : undefined}
+                  title={
+                    running ? undefined
+                    : fridayLocked ? "Include today from the Water page first"
+                    : nightLocked ? "Reopens at Fajr"
+                    : undefined
+                  }
                 >
                   {running ? <Pause size={20} /> : <Play size={20} />}
                 </button>
