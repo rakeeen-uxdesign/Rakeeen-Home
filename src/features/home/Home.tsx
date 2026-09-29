@@ -459,8 +459,11 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
       return;
     }
 
-    // Subsequent auto-selects: only if user hasn't manually clicked in 1 min
-    if (Date.now() - lastManualClickTime < 60000) return;
+    // Subsequent auto-selects: only if user hasn't manually clicked in 1 min.
+    // `now` (ticks every second, see the setInterval above) has to be a dependency
+    // here — otherwise nothing re-runs this effect once the minute has actually
+    // elapsed, and a manual click sticks forever instead of reverting.
+    if (now.getTime() - lastManualClickTime < 60000) return;
     if (activeCardId !== targetCardId) {
       setActiveCardId(targetCardId);
     }
@@ -469,7 +472,8 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
     pomodoroOvertime,
     waterLocked,
     lastManualClickTime,
-    activeCardId
+    activeCardId,
+    now
   ]);
 
   // Quick action function to increment water glasses
@@ -572,7 +576,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
       <main className="w-full max-w-[1400px] mx-auto flex-1 flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8 mb-6 lg:mb-16 items-stretch lg:items-start">
         
         {/* Left stack (Stage Manager dock) */}
-        <div ref={dockRef} className="flex lg:flex-col gap-3 lg:gap-4 overflow-x-auto lg:overflow-visible pb-3 lg:pb-0 shrink-0 lg:w-[230px] scrollbar-none -mx-6 px-6 lg:mx-0 lg:px-0">
+        <div ref={dockRef} className="relative flex lg:flex-col gap-3 lg:gap-4 overflow-x-auto lg:overflow-visible pb-3 lg:pb-0 shrink-0 lg:w-[230px] scrollbar-none -mx-6 px-6 lg:mx-0 lg:px-0">
           {([
             {
               id: 'water',
@@ -631,14 +635,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                   transition: 'transform 500ms cubic-bezier(0.23, 1, 0.32, 1), opacity 500ms cubic-bezier(0.23, 1, 0.32, 1), filter 500ms cubic-bezier(0.23, 1, 0.32, 1), border-color 200ms ease',
                 }}
               >
-                {/* Spinning vector shown left of card when system-auto-selected */}
-                {systemCardId === card.id && (
-                  <div className="hidden lg:block absolute -left-10 top-1/2 -translate-y-1/2 z-10">
-                    <SidebarActiveVector />
-                  </div>
-                )}
-
-
                 <div className="flex justify-between items-start pointer-events-none">
                   <span className="font-sans-main text-xs font-black tracking-tight uppercase truncate mr-2">
                     {card.title}
@@ -673,6 +669,26 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
               </div>
             );
           })}
+
+          {/* Priority arrow — one shared element that springs from card to card instead
+              of popping in and out, so the eye can actually track it moving. Position is
+              purely computed (cardOrder index * fixed card height+gap), not layoutId-based,
+              because the dock switches between a horizontal row (mobile) and vertical stack
+              (desktop) and the arrow only ever needs the desktop vertical math anyway. */}
+          {systemCardId && (
+            <motion.div
+              className="hidden lg:block absolute -left-10 z-10 pointer-events-none"
+              style={{ top: 0 }}
+              animate={{
+                y: (124 - 22) / 2 + ['water', 'pomodoro', 'finance'].indexOf(systemCardId) * (124 + 16),
+                opacity: 1,
+              }}
+              initial={false}
+              transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.9 }}
+            >
+              <SidebarActiveVector />
+            </motion.div>
+          )}
         </div>
 
         {/* Active Stage (Center/Right) */}
