@@ -10,8 +10,8 @@
  *
  * Exceptions (not built through createIcon, but still import these same
  * constants rather than hardcoding their own): the Pomodoro focus ring
- * (src/features/focus/Pomodoro.tsx, scales with its own size), Recharts chart
- * internals, and the TouchID fingerprint glyph (a one-off animated scan
+ * (src/ui/TimerComponents.tsx, scales with its own size), Recharts
+ * chart internals, and the TouchID fingerprint glyph (a one-off animated scan
  * effect, not a reusable icon — but sharp-stroked like everything else).
  */
 import React from 'react';
@@ -19,7 +19,7 @@ import {
   Refresh01Icon, Undo02Icon, PlusSignIcon, ArrowLeft01Icon, ArrowRight01Icon,
   Sun01Icon, Moon01Icon, Camera01Icon, MoreVerticalIcon, Logout04Icon,
   Money01Icon, Wallet01Icon, Delete02Icon, MinusSignIcon, PencilEdit01Icon,
-  PlayIcon, PauseIcon, ArrowExpand01Icon, Cancel01Icon, LockIcon, Login03Icon,
+  PlayIcon, PauseIcon, Cancel01Icon, LockIcon, Login03Icon,
   ArrowDown01Icon,
 } from '@hugeicons/core-free-icons';
 
@@ -76,7 +76,6 @@ export const IconMinus = createIcon(MinusSignIcon as HugeIconData, 'Minus');
 export const IconPencil = createIcon(PencilEdit01Icon as HugeIconData, 'Pencil');
 export const IconPlay = createIcon(PlayIcon as HugeIconData, 'Play');
 export const IconPause = createIcon(PauseIcon as HugeIconData, 'Pause');
-export const IconMaximize2 = createIcon(ArrowExpand01Icon as HugeIconData, 'Maximize2');
 export const IconX = createIcon(Cancel01Icon as HugeIconData, 'X');
 export const IconClose = createIcon(Cancel01Icon as HugeIconData, 'Close');
 export const IconLock = createIcon(LockIcon as HugeIconData, 'Lock');

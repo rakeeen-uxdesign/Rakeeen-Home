@@ -1,8 +1,9 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { usePomodoro } from '@/features/focus/usePomodoro';
+import { usePomodoro } from '@/data/usePomodoro';
+import { useRingAnimation } from '@/ui/useRingAnimation';
 import { formatTime } from '@/lib/format';
-import { WavyRing } from '@/features/focus/Pomodoro';
+import { WavyRing } from '@/ui/TimerComponents';
 import { motion } from 'framer-motion';
 
 interface FloatingTimerProps {
@@ -15,24 +16,16 @@ export const FloatingTimer: React.FC<FloatingTimerProps> = ({ onNavigate }) => {
   const location = useLocation();
 
   // ── All hooks MUST be called before any early returns (Rules of Hooks) ──
-  const [phase, setPhase] = React.useState(0);
-
-  React.useEffect(() => {
-    let animId: number;
-    const animate = () => {
-      setPhase(p => (p + 0.05) % (Math.PI * 2));
-      animId = requestAnimationFrame(animate);
-    };
-    if (running || isOvertime) animId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animId);
-  }, [running, isOvertime]);
+  const total = mode === 'focus' ? focusDuration * 60 : breakDuration * 60;
+  const pct = isOvertime ? 100 : Math.max(0, ((total - timeLeft) / total) * 100);
+  // Same shared hook as Home.tsx and Pomodoro.tsx — otherwise this ring drifts back
+  // to a frame-rate-dependent wave speed and never gets the slow self-rotation.
+  const { phase, rotation } = useRingAnimation({ running, isOvertime, pct, totalSecs: total });
 
   // Derived values (safe to compute before early return)
   const isOnPomodoro = location.pathname.includes('pomodoro');
   const displayTime = isOvertime ? `+${formatTime(overtime)}` : formatTime(timeLeft);
   const color = isOvertime ? 'text-rust' : (mode === 'focus' ? 'text-forest' : 'text-sepia');
-  const total = mode === 'focus' ? focusDuration * 60 : breakDuration * 60;
-  const pct = isOvertime ? 100 : Math.max(0, ((total - timeLeft) / total) * 100);
   const waves = mode === 'focus' ? focusDuration : breakDuration;
 
   const isOnHome = location.pathname === '/' || location.pathname === '' || location.pathname.endsWith('Rakeeen-Home') || location.pathname.endsWith('Rakeeen-Home/');
@@ -51,7 +44,7 @@ export const FloatingTimer: React.FC<FloatingTimerProps> = ({ onNavigate }) => {
     >
       <div className="relative w-full h-full flex items-center justify-center">
         <div className="absolute inset-0 flex items-center justify-center p-2">
-          <WavyRing pct={pct} phase={phase} mode={mode} isOvertime={isOvertime} size={150} waves={waves} isFloating={true} />
+          <WavyRing pct={pct} phase={phase} mode={mode} isOvertime={isOvertime} size={150} waves={waves} rotation={rotation} />
         </div>
         
         {/* Center content */}

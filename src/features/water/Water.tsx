@@ -27,8 +27,8 @@ export const Water: React.FC<WaterProps> = ({ navigate }) => {
     document.title = 'Rakeeen - Water';
   }, []);
 
-  // Day is archived/reset at 18:00 (6 PM, 3h before sleep) and reopens at the real Fajr
-  // time (from the prayer API, refreshed daily). Locking adds during this window prevents
+  // Day is archived/reset at the real Maghrib time (from the prayer API, refreshed
+  // daily) and reopens at the real Fajr time. Locking adds during this window prevents
   // new water from being misattributed to the day that was just closed out.
   const { times } = usePrayer();
   const [now, setNow] = useState(() => new Date());
@@ -39,9 +39,10 @@ export const Water: React.FC<WaterProps> = ({ navigate }) => {
   const [fajrH, fajrM] = (times?.Fajr || '04:00').split(':').map(Number);
   const todayFajr = new Date(now);
   todayFajr.setHours(fajrH, fajrM, 0, 0);
-  const todaySixPm = new Date(now);
-  todaySixPm.setHours(18, 0, 0, 0);
-  const isLocked = now >= todaySixPm || now < todayFajr;
+  const [maghribH, maghribM] = (times?.Maghrib || '18:00').split(':').map(Number);
+  const todayMaghrib = new Date(now);
+  todayMaghrib.setHours(maghribH, maghribM, 0, 0);
+  const isLocked = now >= todayMaghrib || now < todayFajr;
   const { friday, includedToday, includeToday } = useFridayGate(now);
   const fridayLocked = friday && !includedToday;
 

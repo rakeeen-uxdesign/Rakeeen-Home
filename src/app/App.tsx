@@ -9,7 +9,7 @@ import { TouchIDGate } from '@/features/auth/TouchIDGate';
 import { CustomCursor } from '@/ui/CustomCursor';
 import { FloatingTimer } from '@/features/focus/FloatingTimer';
 import { AuthProvider, useAuth } from '@/features/auth/useAuth';
-import { PomodoroProvider } from '@/features/focus/usePomodoro';
+import { PomodoroProvider } from '@/data/usePomodoro';
 import { DailyResetManager } from '@/app/DailyResetManager';
 import { DeviceCodeBanner } from '@/features/auth/DeviceCodeBanner';
 import { motion, AnimatePresence } from 'framer-motion';

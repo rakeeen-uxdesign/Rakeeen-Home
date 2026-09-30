@@ -8,14 +8,15 @@ import {
 } from '@/ui/icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/data/firebase';
-import { usePomodoro } from '@/features/focus/usePomodoro';
+import { usePomodoro } from '@/data/usePomodoro';
+import { useRingAnimation } from '@/ui/useRingAnimation';
 import { AppModal } from '@/ui/AppModal';
 import { getLogicalDate } from '@/domain/day';
 import { usePrayer } from '@/data/usePrayer';
 import { useSleepLock } from '@/data/useSleepLock';
 import { useFridayGate } from '@/data/useFridayGate';
 import { DotMatrixText } from '@/ui/DotMatrixText';
-import { DMTimer, WavyProgressBar } from '@/features/focus/TimerComponents';
+import { DMTimer, WavyRing } from '@/ui/TimerComponents';
 import {
   MaskedValue, SidebarActiveVector, WaterVector, FocusVector, FinanceVector, MonthFingerprint,
 } from '@/features/home/components/visuals';
@@ -93,6 +94,22 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   } = usePomodoro();
   const focusMinutes = weekStats?.[todayIdx]?.minutes || 0;
   const focusHours = (focusMinutes / 60).toFixed(1).replace('.0', '');
+
+  // Same ring motion (wave + slow rotation) as the full Focus page — shared via
+  // useRingAnimation so the mini ring on this card and the one on /pomodoro are
+  // never hand-tuned copies that can drift out of sync. Gated on the Focus card
+  // actually being the one displayed — otherwise this rAF loop (and the re-renders
+  // it drives) would keep running at animation-frame rate even while looking at
+  // the Water or Finance card, for a ring that isn't on screen.
+  const pomodoroTotalSecs = (mode === 'focus' ? focusDuration : breakDuration) * 60;
+  const pomodoroPct = pomodoroOvertime ? 100 : Math.max(0, ((pomodoroTotalSecs - timeLeft) / pomodoroTotalSecs) * 100);
+  const isPomodoroCardShown = displayedCardId === 'pomodoro';
+  const { phase: focusRingPhase, rotation: focusRingRotation, smoothPct: focusRingSmoothPct } = useRingAnimation({
+    running: pomodoroRunning && isPomodoroCardShown,
+    isOvertime: pomodoroOvertime && isPomodoroCardShown,
+    pct: pomodoroPct,
+    totalSecs: pomodoroTotalSecs,
+  });
 
   // Save today's snapshot whenever key data changes
   // IMPORTANT: wait for dailyHistoryReady — if we write before Firestore loads,
@@ -419,20 +436,24 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   // Format English Date
   const dateStringEn = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  // Day is archived/reset at 18:00 (6pm) and reopens at the real Fajr time (from the prayer
-  // API, refreshed daily) — Water is locked in between. Falls back to 4:00 AM if prayer
-  // times haven't loaded yet. Computed here (not just below, near the water button) because
-  // the priority effect right below also needs it.
+  // Day is archived/reset at the real Maghrib time (from the prayer API, refreshed daily)
+  // and reopens at the real Fajr time — Water is locked in between. Falls back to fixed
+  // clock times if prayer times haven't loaded yet. Computed here (not just below, near
+  // the water button) because the priority effect right below also needs it.
   const [fajrH, fajrM] = (times?.Fajr || '04:00').split(':').map(Number);
   const todayFajr = new Date(now);
   todayFajr.setHours(fajrH, fajrM, 0, 0);
-  const todaySixPm = new Date(now);
-  todaySixPm.setHours(18, 0, 0, 0);
-  const waterLocked = now >= todaySixPm || now < todayFajr;
-  // New focus sessions can't be started between midnight and Fajr — same rule the
-  // Pomodoro page itself enforces (see Pomodoro.tsx's `nightLocked`); this mini "Start
-  // Focus" button is a second entry point into the same action, so it needs the same gate.
-  const focusNightLocked = now < todayFajr;
+  const [maghribH, maghribM] = (times?.Maghrib || '18:00').split(':').map(Number);
+  const todayMaghrib = new Date(now);
+  todayMaghrib.setHours(maghribH, maghribM, 0, 0);
+  const waterLocked = now >= todayMaghrib || now < todayFajr;
+  // New focus sessions can't be started between Isha and Fajr — same rule the Pomodoro
+  // page itself enforces (see Pomodoro.tsx's `nightLocked`); this mini "Start Focus"
+  // button is a second entry point into the same action, so it needs the same gate.
+  const [ishaH, ishaM] = (times?.Isha || '19:00').split(':').map(Number);
+  const todayIsha = new Date(now);
+  todayIsha.setHours(ishaH, ishaM, 0, 0);
+  const focusNightLocked = now >= todayIsha || now < todayFajr;
   const { friday, includedToday } = useFridayGate(now);
   const focusFridayLocked = friday && !includedToday;
 
@@ -757,7 +778,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                         </span>
                       </div>
 
-                      {/* Middle — dot-matrix countdown */}
+                      {/* Middle — ring (same motion as the full Focus page) beside the dot-matrix countdown */}
                       {(() => {
                         const secs = pomodoroOvertime ? overtime : timeLeft;
                         const totalMins = Math.floor(secs / 60);
@@ -765,20 +786,22 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                         const ss = String(secs % 60).padStart(2, '0');
                         const col = pomodoroOvertime ? 'var(--pomo-overtime)' : mode === 'break' ? 'var(--pomo-break)' : 'var(--pomo-focus)';
                         return (
-                          <div className="flex-1 flex items-center justify-center w-full">
+                          <div className="flex-1 flex items-center justify-center gap-6 w-full">
+                            <div className="shrink-0 w-[110px] h-[110px] sm:w-[140px] sm:h-[140px]">
+                              <WavyRing
+                                pct={focusRingSmoothPct}
+                                phase={focusRingPhase}
+                                mode={mode}
+                                isOvertime={pomodoroOvertime}
+                                size={140}
+                                waves={mode === 'focus' ? focusDuration : breakDuration}
+                                rotation={focusRingRotation}
+                              />
+                            </div>
                             <DMTimer mm={mm} ss={ss} color={col} maxWidth="min(100%, 340px)" />
                           </div>
                         );
                       })()}
-
-                      {/* Bottom — wavy dot-matrix progress bar */}
-                      <WavyProgressBar
-                        pct={pomodoroOvertime ? 100 : Math.max(0, (((mode === 'focus' ? focusDuration : breakDuration) * 60 - timeLeft) / ((mode === 'focus' ? focusDuration : breakDuration) * 60)) * 100)}
-                        isOvertime={pomodoroOvertime}
-                        mode={mode}
-                        running={pomodoroRunning}
-                        totalSecs={(mode === 'focus' ? focusDuration : breakDuration) * 60}
-                      />
                     </>
                   ) : (
                     <>

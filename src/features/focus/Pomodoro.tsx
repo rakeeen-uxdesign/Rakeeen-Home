@@ -1,17 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, ReferenceLine } from 'recharts';
 import { formatTime } from '@/lib/format';
 import { niceTicks } from '@/lib/charts';
 import { ChartTooltip } from '@/ui/UIComponents';
 import {
-  IconPlay as Play, IconPause as Pause, IconRotateCcw as RotateCcw, IconMaximize2 as Maximize2,
-  IconX as X, IconArrowLeft as ArrowLeft, IconChevronRight as ChevronRight,
+  IconPlay as Play, IconPause as Pause, IconRotateCcw as RotateCcw,
+  IconArrowLeft as ArrowLeft, IconChevronRight as ChevronRight,
 } from '@/ui/icons';
-import { usePomodoro } from '@/features/focus/usePomodoro';
+import { usePomodoro } from '@/data/usePomodoro';
+import { useRingAnimation } from '@/ui/useRingAnimation';
+import { WavyRing } from '@/ui/TimerComponents';
 import { useFridayGate } from '@/data/useFridayGate';
 import { usePrayer } from '@/data/usePrayer';
-import { DMTimer, WavyProgressBar } from '@/features/focus/TimerComponents';
 
 
 interface PomodoroProps {
@@ -29,92 +30,6 @@ const getTip = (value: number, type: string, reportType: 'sessions' | 'minutes')
   return "Keep pushing";
 };
 
-// ─── Wavy Timer Ring (Matches user screenshot: smooth left, wavy right, split with top/bottom gaps) ───
-export const WavyRing: React.FC<{
-  pct: number;
-  phase: number;
-  mode: 'focus' | 'break';
-  isOvertime: boolean;
-  size?: number;
-  waves: number;
-  isFloating?: boolean;
-}> = ({ pct, phase, mode, isOvertime, size = 300, waves, isFloating = false }) => {
-  const half = size / 2;
-  const baseR = half * 0.82;
-  const gapAngle = 0.04; // Tiny visual seam where progress meets remaining
-
-  // Sweeps `sweep` radians starting at `startAngle` (clockwise, 12 o'clock = -PI/2).
-  // Wavy traces progress (elapsed) — its arc length IS the pct, so it grows as time
-  // passes; the smooth arc is what's left of the circle and shrinks to match.
-  const generateArcPath = (startAngle: number, sweep: number, wavy: boolean) => {
-    const amplitude = size * (waves > 40 ? 0.015 : 0.02);
-    const pathPoints: string[] = [];
-    // Resolution scales with how many wave CYCLES actually appear in this sweep, not
-    // with the sweep angle itself — a flat minimum point count meant short arcs with
-    // many cycles (early progress, before it grows past a certain size) got squeezed
-    // into too few points and rendered as jagged, faceted kinks instead of a smooth curve.
-    const cyclesInSweep = (sweep / (Math.PI * 2)) * waves;
-    const steps = wavy
-      ? Math.max(8, Math.ceil(cyclesInSweep * 24))
-      : Math.max(2, Math.round(300 * (sweep / (Math.PI * 2))));
-    for (let i = 0; i <= steps; i++) {
-      const angle = startAngle + (i / steps) * sweep;
-      const wave = wavy ? Math.sin(angle * waves + phase) * amplitude : 0;
-      const r = baseR + wave;
-      const x = half + r * Math.cos(angle);
-      const y = half + r * Math.sin(angle);
-      pathPoints.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(3)} ${y.toFixed(3)}`);
-    }
-    return pathPoints.join(' ');
-  };
-
-  const clampedPct = Math.max(0, Math.min(100, pct));
-  const fullSweep = Math.PI * 2 - gapAngle * 2;
-  const progressSweep = fullSweep * (clampedPct / 100);
-  const remainingSweep = fullSweep - progressSweep;
-  const startAngle = -Math.PI / 2 + gapAngle;
-
-  const wavyProgressPath = generateArcPath(startAngle, progressSweep, true);
-  const smoothRemainingPath = generateArcPath(startAngle + progressSweep + gapAngle * 2, Math.max(0, remainingSweep - gapAngle * 2), false);
-
-  const strokeColor = isOvertime
-    ? 'var(--pomo-overtime)'
-    : (mode === 'break' ? 'var(--pomo-break)' : 'var(--pomo-focus)');
-
-  return (
-    <svg viewBox={`0 0 ${size} ${size}`}
-      className="block overflow-visible w-full h-full"
-      style={{ maxWidth: '100%', maxHeight: '100%' }}
-      shapeRendering="geometricPrecision"
-    >
-      {/* Wavy Progress (elapsed) — grows as time passes */}
-      {progressSweep > 0 && (
-        <path
-          d={wavyProgressPath}
-          fill="none"
-          stroke={strokeColor}
-          strokeWidth={size * 0.024}
-          strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      )}
-
-      {/* Smooth Remaining (time left) — shrinks as the wavy progress grows */}
-      {remainingSweep > gapAngle * 2 && (
-        <path
-          d={smoothRemainingPath}
-          fill="none"
-          stroke="var(--ink)"
-          strokeWidth={size * 0.015}
-          strokeLinecap="round"
-          className="opacity-[0.12]"
-          vectorEffect="non-scaling-stroke"
-        />
-      )}
-    </svg>
-  );
-};
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
   const {
@@ -125,28 +40,22 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
   const { friday, includedToday } = useFridayGate();
   const fridayLocked = friday && !includedToday;
 
-  // New sessions can't be started between midnight and the real Fajr time (from the
-  // prayer API, refreshed daily) — mirrors Water's overnight lock, but Water's own
-  // window wraps past midnight (6pm→Fajr) while this one doesn't need to: a fresh
-  // Date() each render is always compared against *today's* Fajr instant, so this is
-  // true only for the midnight-to-Fajr slice of the current calendar day. Falls back
-  // to 4:00 AM if prayer times haven't loaded yet.
+  // New sessions can't be started between Isha and the real Fajr time (both from the
+  // prayer API, refreshed daily, same as Water's own Maghrib→Fajr lock). Falls back to
+  // fixed clock times if prayer times haven't loaded yet.
   const { times: pomoTimes } = usePrayer();
   const [pomoFajrH, pomoFajrM] = (pomoTimes?.Fajr || '04:00').split(':').map(Number);
   const todayFajr = new Date();
   todayFajr.setHours(pomoFajrH, pomoFajrM, 0, 0);
-  const nightLocked = new Date() < todayFajr;
+  const [pomoIshaH, pomoIshaM] = (pomoTimes?.Isha || '19:00').split(':').map(Number);
+  const todayIsha = new Date();
+  todayIsha.setHours(pomoIshaH, pomoIshaM, 0, 0);
+  const nightLocked = new Date() >= todayIsha || new Date() < todayFajr;
 
   const [view, setView] = React.useState<'week' | 'month' | 'year'>('week');
-  const [phase, setPhase] = React.useState(0);
-  const [smoothRingPct, setSmoothRingPct] = React.useState(0);
-  const [isFullscreen, setIsFullscreen] = React.useState(false);
-  const [normalVisible, setNormalVisible] = React.useState(true);
   const [pomTab, setPomTab] = React.useState<'focus' | 'analysis'>('focus');
-  const baselinePctRef = React.useRef(0);
-  const baselineTimeRef = React.useRef(Date.now());
 
-  // Declare early so useEffects below can reference them
+  // Declare early so useRingAnimation below can reference them
   const FOCUS_S = focusDuration * 60;
   const BREAK_S = breakDuration * 60;
   const pct = isOvertime ? 100 : (mode === 'focus'
@@ -154,70 +63,14 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
     : ((BREAK_S - timeLeft) / BREAK_S) * 100
   );
 
+  const { phase, rotation: ringRotation, smoothPct: smoothRingPct } = useRingAnimation({
+    running,
+    isOvertime,
+    pct,
+    totalSecs: mode === 'focus' ? FOCUS_S : BREAK_S,
+  });
+
   useEffect(() => { document.title = 'Rakeeen - Pomodoro'; }, []);
-
-  // Update baseline when pct ticks (once per second)
-  useEffect(() => {
-    baselinePctRef.current = pct;
-    baselineTimeRef.current = Date.now();
-  }, [pct]);
-
-  // Wave animation + smooth ring pct interpolation
-  useEffect(() => {
-    let animId: number;
-    const animate = () => {
-      setPhase(p => (p + 0.05) % (Math.PI * 2));
-      if (running && !isOvertime) {
-        const elapsed = (Date.now() - baselineTimeRef.current) / 1000;
-        const totalSecs = mode === 'focus' ? FOCUS_S : BREAK_S;
-        setSmoothRingPct(Math.min(baselinePctRef.current + (elapsed / totalSecs) * 100, 100));
-      } else {
-        setSmoothRingPct(pct);
-      }
-      animId = requestAnimationFrame(animate);
-    };
-    if (running || isOvertime) animId = requestAnimationFrame(animate);
-    else setSmoothRingPct(pct);
-    return () => cancelAnimationFrame(animId);
-  }, [running, isOvertime, FOCUS_S, BREAK_S, mode, pct]);
-
-  // Sync React state with browser fullscreen API + hide body scroll in fullscreen
-  useEffect(() => {
-    const onFsChange = () => {
-      if (!document.fullscreenElement) {
-        setIsFullscreen(false);
-        setNormalVisible(true); // browser fully exited — safe to show page
-      }
-    };
-    document.addEventListener('fullscreenchange', onFsChange);
-    return () => document.removeEventListener('fullscreenchange', onFsChange);
-  }, []);
-
-  useEffect(() => {
-    const html = document.documentElement;
-    if (isFullscreen) {
-      html.style.overflow = 'hidden';
-      html.style.scrollbarGutter = 'auto';
-    } else {
-      html.style.overflow = '';
-      html.style.scrollbarGutter = '';
-    }
-    return () => {
-      html.style.overflow = '';
-      html.style.scrollbarGutter = '';
-    };
-  }, [isFullscreen]);
-
-  const enterFullscreen = async () => {
-    setNormalVisible(false);
-    setIsFullscreen(true);
-    try { await document.documentElement.requestFullscreen(); } catch {}
-  };
-
-  const exitFullscreen = () => {
-    setIsFullscreen(false);
-    // browser fullscreen exits in onExitComplete, after animation finishes
-  };
 
   const getTimerColor = () => {
     if (isOvertime) return 'var(--pomo-overtime)';
@@ -357,84 +210,7 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
 
   return (
     <>
-      {/* Fullscreen Overlay */}
-      <AnimatePresence onExitComplete={() => {
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-          // normalVisible will be set by fullscreenchange when browser fully exits
-        } else {
-          setNormalVisible(true); // not in browser fullscreen — show immediately
-        }
-      }}>
-        {isFullscreen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.35, ease: 'easeInOut' }}
-            className="fixed inset-0 z-[200] bg-[var(--bg)]"
-          >
-            <button
-              onClick={exitFullscreen}
-              className="absolute top-6 right-6 w-10 h-10 border border-ink/15 flex items-center justify-center text-ink/30 hover:border-ink/60 hover:text-ink/60 transition-all cursor-pointer z-10"
-            >
-              <X size={20} />
-            </button>
-
-            <div className="w-full h-full flex flex-col items-center justify-center">
-              {/* Status label */}
-              <div className="text-[10px] uppercase tracking-[0.5em] font-black mb-10" style={{ color: getTimerColor() }}>
-                {isOvertime ? '● OVERTIME' : `● ${mode.toUpperCase()}`}
-              </div>
-
-              {/* DMTimer */}
-              {(() => {
-                const timeStr = isOvertime ? formatTime(overtime) : formatTime(timeLeft);
-                const [mmStr, ssStr] = timeStr.split(':');
-                return (
-                  <DMTimer
-                    mm={mmStr}
-                    ss={ssStr}
-                    color={getTimerColor()}
-                    maxWidth="min(90vw, 680px)"
-                  />
-                );
-              })()}
-
-              {/* WavyProgressBar */}
-              <div className="w-full max-w-[680px] mt-10 px-4">
-                <WavyProgressBar pct={pct} isOvertime={isOvertime} mode={mode} running={running} totalSecs={mode === 'focus' ? FOCUS_S : BREAK_S} />
-              </div>
-
-              {/* Controls — play/pause + reset */}
-              <div className="mt-10 flex items-center gap-4">
-                <button
-                  onClick={running ? pause : start}
-                  disabled={!running && (fridayLocked || nightLocked)}
-                  className="w-14 h-14 border border-ink flex items-center justify-center bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                  title={
-                    running ? undefined
-                    : fridayLocked ? "Include today from the Water page first"
-                    : nightLocked ? "Reopens at Fajr"
-                    : undefined
-                  }
-                >
-                  {running ? <Pause size={20} /> : <Play size={20} />}
-                </button>
-                <button
-                  onClick={reset}
-                  className="w-14 h-14 border border-ink/20 flex items-center justify-center text-ink/30 hover:border-ink/60 hover:text-ink/60 transition-all cursor-pointer bg-transparent"
-                >
-                  <RotateCcw size={20} />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Normal View */}
-      <div className={`min-h-screen bg-bg text-ink py-6 md:py-12 px-6 md:px-12 lg:px-20 font-sans-main flex flex-col transition-colors duration-300 ${normalVisible ? '' : 'invisible'}`}>
+      <div className="min-h-screen bg-bg text-ink py-6 md:py-12 px-6 md:px-12 lg:px-20 font-sans-main flex flex-col transition-colors duration-300">
         
         {/* HEADER */}
         <header className="w-full max-w-[1000px] mx-auto mb-12">
@@ -489,15 +265,6 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
           {pomTab === 'focus' && (
           <div className="text-center brutalist-card no-lift relative p-6 sm:p-10">
 
-            {/* Fullscreen Button */}
-            <button
-              onClick={enterFullscreen}
-              className="absolute top-4 right-4 w-8 h-8 border border-ink/20 flex items-center justify-center text-ink/30 hover:border-ink/60 hover:text-ink/60 transition-all cursor-pointer bg-transparent"
-              title="Fullscreen"
-            >
-              <Maximize2 size={14} />
-            </button>
-
             <div className="text-[10px] uppercase tracking-[0.3em] font-black mb-10">
               <span style={{ color: getTimerColor() }}>
                 {isOvertime ? 'Over-focusing' : (mode === 'focus' ? 'Focus session' : 'Break time')}
@@ -508,7 +275,7 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
             <div className="relative w-full max-w-[300px] aspect-square mx-auto flex items-center justify-center">
               <div className="absolute inset-6 rounded-full blur-[40px] opacity-20 -z-10 transition-colors duration-1000" style={{ backgroundColor: getTimerColor() }} />
               <div className="absolute inset-0 flex items-center justify-center">
-                <WavyRing pct={smoothRingPct} phase={phase} mode={mode} isOvertime={isOvertime} size={300} waves={mode === 'focus' ? focusDuration : breakDuration} />
+                <WavyRing pct={smoothRingPct} phase={phase} mode={mode} isOvertime={isOvertime} size={300} waves={mode === 'focus' ? focusDuration : breakDuration} rotation={ringRotation} />
               </div>
 
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">

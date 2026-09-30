@@ -171,10 +171,19 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               // but we'll send the final Discord report when they actually click "Start Break"
               // to capture the full time spent.
             } else {
-              // Break finished
+              // Break finished. The checkpoint only stores a snapshot, not a
+              // timestamp — on reload it resumes counting down from whatever
+              // `timeLeft` it last held, in real time, no matter how long ago
+              // that was. Since this transition sets `running` false, the
+              // periodic/on-hide checkpoint writer below stops running too and
+              // would never persist that — leaving a stale "still on break"
+              // checkpoint that replays its last few leftover seconds forever,
+              // on every future reload, even though nothing is actually running.
+              // Clearing it here (same as reset()) is what actually stops that.
               setRunning(false);
               setMode('focus');
               setTimeLeft(FOCUS);
+              setCheckpoint(null);
               sendDiscordNotification('break_complete');
             }
           }
@@ -182,7 +191,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }, 200);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [running, mode, isOvertime, sendDiscordNotification, FOCUS, focusDuration]);
+  }, [running, mode, isOvertime, sendDiscordNotification, FOCUS, focusDuration, setCheckpoint]);
 
   // Periodic + on-hide checkpoint: keeps `pomodoro_checkpoint` in sync with the
   // live timer so a reload/crash restores from here instead of losing progress.
@@ -255,7 +264,8 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setOvertime(0);
     setTimeLeft(FOCUS);
     setRunning(false);
-  }, [FOCUS]);
+    setCheckpoint(null);
+  }, [FOCUS, setCheckpoint]);
 
   const saveProgress = useCallback(() => {
     if (mode !== 'focus') return;
