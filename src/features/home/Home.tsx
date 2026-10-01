@@ -4,7 +4,7 @@ import { useFirebaseSync } from '@/data/useFirebaseSync';
 import { uploadImage } from '@/lib/cloudinary';
 import {
   IconSun as Sun, IconPlus as Plus, IconCamera as Camera, IconMoreVertical as MoreVertical,
-  IconLogOut as LogOut, IconMoon as Moon,
+  IconLogOut as LogOut, IconMoon as Moon, IconPlay as Play,
 } from '@/ui/icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/data/firebase';
@@ -103,6 +103,10 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   // the Water or Finance card, for a ring that isn't on screen.
   const pomodoroTotalSecs = (mode === 'focus' ? focusDuration : breakDuration) * 60;
   const pomodoroPct = pomodoroOvertime ? 100 : Math.max(0, ((pomodoroTotalSecs - timeLeft) / pomodoroTotalSecs) * 100);
+  // A session that's been started and has progress, but isn't currently ticking —
+  // distinct from "never started" (timeLeft === pomodoroTotalSecs) so the card can
+  // show a paused state instead of looking identical to true idle.
+  const pomodoroPaused = !pomodoroRunning && !pomodoroOvertime && timeLeft > 0 && timeLeft < pomodoroTotalSecs;
   const isPomodoroCardShown = displayedCardId === 'pomodoro';
   const { phase: focusRingPhase, rotation: focusRingRotation, smoothPct: focusRingSmoothPct } = useRingAnimation({
     running: pomodoroRunning && isPomodoroCardShown,
@@ -614,10 +618,10 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
               Vector: FocusVector,
               route: 'pomodoro',
               isRunning: false,
-              metric: pomodoroRunning || pomodoroOvertime
+              metric: (pomodoroRunning || pomodoroOvertime || pomodoroPaused)
                 ? (pomodoroOvertime ? `+${Math.floor(overtime / 60)}m` : `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`)
                 : `${focusMinutes > 0 ? focusHours : '0'}h`,
-              subText: pomodoroRunning || pomodoroOvertime ? (pomodoroOvertime ? 'OVERTIME' : mode.toUpperCase()) : 'FOCUSED TODAY',
+              subText: pomodoroOvertime ? 'OVERTIME' : pomodoroPaused ? 'PAUSED' : pomodoroRunning ? mode.toUpperCase() : 'FOCUSED TODAY',
             },
             {
               id: 'finance',
@@ -768,13 +772,17 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
 
               {displayedCardId === 'pomodoro' && (
                 <div className="flex-1 flex flex-col justify-between">
-                  {(pomodoroRunning || pomodoroOvertime) ? (
+                  {(pomodoroRunning || pomodoroOvertime || pomodoroPaused) ? (
                     <>
-                      {/* Top — status strip, mirrors idle header */}
+                      {/* Top — status strip, mirrors idle header. Paused gets its own
+                          dimmed label — the resume control sits below, under the timer. */}
                       <div className="flex justify-between items-start">
                         <span className="font-mono-main text-[10px] font-bold tracking-[0.25em] uppercase"
-                          style={{ color: pomodoroOvertime ? 'var(--pomo-overtime)' : mode === 'break' ? 'var(--pomo-break)' : 'var(--pomo-focus)' }}>
-                          {pomodoroOvertime ? '● OVERTIME' : `● ${mode.toUpperCase()}`}
+                          style={{
+                            color: pomodoroOvertime ? 'var(--pomo-overtime)' : mode === 'break' ? 'var(--pomo-break)' : 'var(--pomo-focus)',
+                            opacity: pomodoroPaused ? 0.4 : 1,
+                          }}>
+                          {pomodoroOvertime ? '● OVERTIME' : pomodoroPaused ? '● PAUSED' : `● ${mode.toUpperCase()}`}
                         </span>
                       </div>
 
@@ -802,6 +810,18 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                           </div>
                         );
                       })()}
+
+                      {pomodoroPaused && (
+                        <div className="flex justify-center">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); pomodoroStart(); }}
+                            className="w-12 h-12 border border-ink flex items-center justify-center transition-all bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 cursor-pointer"
+                            title="Resume"
+                          >
+                            <Play size={18} />
+                          </button>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <>

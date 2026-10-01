@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useFirebaseSync } from '@/data/useFirebaseSync';
+import { usePrayer } from '@/data/usePrayer';
 import { POMODORO_WEEKLY_MOCK } from '@/constants/mockData';
 import { getPomoTodayIdx } from '@/domain/day';
 import { breakMinutesFor } from '@/domain/focus/session';
@@ -293,6 +294,56 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setTimeLeft(calculatedBreakMins * 60);
     setRunning(true);
   }, [mode, focusDuration, timeLeft, overtime, weekStats, todayIdx, setWeekStats, sendDiscordNotification, setLogs]);
+
+  // Focus is locked Isha→Fajr (Pomodoro.tsx's `nightLocked`), but that lock only blocks
+  // *starting* a new session — a session already running (or sitting in overtime) when
+  // Isha hits just keeps counting, uninterrupted, with no button left to save it since
+  // Start is now disabled. DailyResetManager's own Isha close-out can't catch this either:
+  // it only archives what's already been committed to `pomodoro_week` (via this same
+  // save/startBreak path), never the live in-memory timer. Without this, a session left
+  // running through Isha silently never gets archived or zeroed at all.
+  const { times: nightLockPrayerTimes } = usePrayer();
+  const firedIshaAutoSaveRef = useRef('');
+  useEffect(() => {
+    if (mode !== 'focus' || !(running || isOvertime)) return;
+    const check = () => {
+      const now = new Date();
+      const todayDateStr = now.toDateString();
+      if (firedIshaAutoSaveRef.current === todayDateStr) return;
+      const [ishaH, ishaM] = (nightLockPrayerTimes?.Isha || '19:00').split(':').map(Number);
+      const todayIsha = new Date(now.getFullYear(), now.getMonth(), now.getDate(), ishaH, ishaM, 0, 0);
+      if (now < todayIsha) return;
+      firedIshaAutoSaveRef.current = todayDateStr;
+
+      // Read live timeLeft/overtime from the checkpoint ref (updated every render, see
+      // above) instead of closing over them directly — keeping them out of this effect's
+      // deps means the 30s interval below isn't torn down and recreated on every ~200ms
+      // countdown tick while running.
+      const { timeLeft: liveTimeLeft, overtime: liveOvertime } = checkpointStateRef.current;
+      const focusGained = Math.max(1, Math.floor((focusDuration * 60 - liveTimeLeft + liveOvertime) / 60));
+      setSessions(s => s + 1);
+      const nowTime = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      setLogs(l => [{ time: nowTime, duration: focusGained }, ...l]);
+      sendDiscordNotification('focus_complete', { duration: focusDuration, overtime: liveOvertime });
+      const currentWeekStats = Array.isArray(weekStats) && weekStats.length === 7 ? weekStats : POMODORO_WEEKLY_MOCK;
+      const updated = currentWeekStats.map((d: any, i: number) =>
+        i === todayIdx ? { ...d, sessions: d.sessions + 1, minutes: (d.minutes || 0) + focusGained } : d
+      );
+      setWeekStats(updated);
+
+      // Go fully idle rather than into a break — Focus (and, by extension, starting a
+      // break) is locked until Fajr, so there's nothing to run into.
+      setMode('focus');
+      setIsOvertime(false);
+      setOvertime(0);
+      setTimeLeft(FOCUS);
+      setRunning(false);
+      setCheckpoint(null);
+    };
+    const interval = setInterval(check, 30000);
+    check();
+    return () => clearInterval(interval);
+  }, [mode, running, isOvertime, nightLockPrayerTimes, focusDuration, weekStats, todayIdx, setWeekStats, sendDiscordNotification, setLogs, FOCUS, setCheckpoint]);
 
   return (
     <PomodoroContext.Provider value={{

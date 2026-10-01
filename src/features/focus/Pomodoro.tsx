@@ -159,13 +159,33 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
     <div className="flex flex-col items-center gap-4">
       <div className="flex justify-center items-center gap-3">
         {isOvertime || (mode === 'break' && timeLeft === 0) ? (
-          <button 
-            onClick={isOvertime ? startBreak : startNewSession} 
-            className="btn-brutalist min-w-[180px] py-3 text-xs flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <RotateCcw size={14} />
-            <span>{isOvertime ? 'Take a break' : 'Start new session'}</span>
-          </button>
+          <>
+            {isOvertime && (
+              <button
+                onClick={running ? pause : start}
+                className="w-12 h-12 border border-ink/20 flex items-center justify-center text-ink/60 hover:border-ink/60 hover:text-ink transition-all cursor-pointer bg-transparent"
+                title={running ? 'Stop' : 'Resume'}
+              >
+                {running ? <Pause size={18} /> : <Play size={18} />}
+              </button>
+            )}
+            <button
+              onClick={isOvertime ? startBreak : startNewSession}
+              className="btn-brutalist min-w-[180px] py-3 text-xs flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <RotateCcw size={14} />
+              <span>{isOvertime ? 'Take a break' : 'Start new session'}</span>
+            </button>
+            {isOvertime && (
+              <button
+                onClick={startNewSession}
+                className="w-12 h-12 border border-ink/20 flex items-center justify-center text-ink/30 hover:border-ink/60 hover:text-ink/60 transition-all cursor-pointer bg-transparent"
+                title="Restart from the beginning"
+              >
+                <RotateCcw size={18} />
+              </button>
+            )}
+          </>
         ) : (
           <>
             <button
