@@ -58,10 +58,29 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   } | null>('pomodoro_checkpoint', null);
   const hydratedFromCheckpoint = useRef(false);
 
+  // Mirrors whether this tab is sitting idle right now, kept fresh via its own
+  // effect (same ref pattern as checkpointStateRef below) so the
+  // checkpoint-adoption effect can read it synchronously without adding
+  // running/isOvertime/timeLeft/mode to its own deps.
+  const isLocallyIdleRef = useRef(true);
   useEffect(() => {
-    if (hydratedFromCheckpoint.current) return;
+    isLocallyIdleRef.current = !running && !isOvertime && mode === 'focus' && timeLeft === FOCUS;
+  }, [running, isOvertime, mode, timeLeft, FOCUS]);
+
+  // On first mount, always adopt whatever checkpoint exists (reload/crash
+  // recovery — the original purpose of this effect). After that, keep
+  // adopting LATER checkpoint changes too, but only while this tab is
+  // sitting idle — that's what makes a session started remotely (the
+  // Discord bot) show up here within moments instead of needing a manual
+  // reload, while a tab that's already mid-session keeps ticking on its own
+  // local clock instead of getting yanked back to a stale snapshot every
+  // time its own ~45s periodic checkpoint write echoes back through
+  // Firestore's realtime listener.
+  useEffect(() => {
+    const isFirstRun = !hydratedFromCheckpoint.current;
     hydratedFromCheckpoint.current = true;
     if (!checkpoint) return;
+    if (!isFirstRun && !isLocallyIdleRef.current) return;
     setTimeLeft(checkpoint.timeLeft);
     setOvertime(checkpoint.overtime);
     setIsOvertime(checkpoint.isOvertime);

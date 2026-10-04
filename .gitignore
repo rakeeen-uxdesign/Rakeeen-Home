@@ -32,6 +32,7 @@ dist-ssr
 
 # Firebase
 .firebase
+backend/serviceAccountKey.json
 
 # Backend runtime data (not source, regenerated at runtime)
 backend/subscriptions.json

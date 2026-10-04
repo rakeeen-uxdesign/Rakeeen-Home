@@ -5,6 +5,8 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { registerCommands } from './src/discord/commands.js';
+import { routeInteraction } from './src/discord/router.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SUBS_FILE = path.join(__dirname, 'subscriptions.json');
@@ -34,11 +36,16 @@ async function sendWebhookMessage(content) {
   }
 }
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   console.log(`🤖 Discord Water Bot is online as ${client.user.tag}`);
-  
+
   // Seed subscriptions on startup
   await seedSubscriptions();
+
+  // Dashboard control panel (/bommy /water /focus /finance)
+  await registerCommands(client, CHANNEL_ID).catch((err) =>
+    console.error('❌ Failed to register slash commands:', err.message)
+  );
 
   // (gold price scheduling moved to app.listen startup block)
 
@@ -125,6 +132,8 @@ client.login(BOT_TOKEN).catch(err => {
   console.error("❌ Failed to login:", err.message);
 });
 
+client.on('interactionCreate', routeInteraction);
+
 // ============================================================
 // EMBED ALERTS HELPERS
 // ============================================================
@@ -171,19 +180,19 @@ async function sendSubscriptionAlert(sub) {
   const dateStr = nowEgypt.toLocaleDateString('en-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   const embed = {
-    title: '🔁  Subscription Renewal Due',
+    title: 'Subscription Renewal Due',
     color: 0xF0C040, // Gold/amber
     description: `**${sub.name}** is renewing today — make sure it's covered.`,
     fields: [
-      { name: '💳  Amount', value: `\`${sub.cost.toLocaleString('en-EG')} EGP\``, inline: true },
-      { name: '🏦  Bank', value: sub.bank || '—', inline: true },
-      { name: '📅  Date', value: dateStr, inline: false },
+      { name: 'Amount', value: `\`${sub.cost.toLocaleString('en-EG')} EGP\``, inline: true },
+      { name: 'Bank', value: sub.bank || '—', inline: true },
+      { name: 'Date', value: dateStr, inline: false },
     ],
     footer: { text: 'Rakeeen · Finance · Subscriptions' },
     thumbnail: { url: 'https://cdn-icons-png.flaticon.com/512/2088/2088617.png' }
   };
 
-  const altText = `🔁 **Subscription Due: ${sub.name}**\n💳 ${sub.cost.toLocaleString('en-EG')} EGP · 🏦 ${sub.bank || 'Unknown'}\n📅 ${dateStr}`;
+  const altText = `**Subscription Due: ${sub.name}**\n${sub.cost.toLocaleString('en-EG')} EGP · ${sub.bank || 'Unknown'}\n${dateStr}`;
   await sendDiscordEmbed(embed, altText);
 }
 
