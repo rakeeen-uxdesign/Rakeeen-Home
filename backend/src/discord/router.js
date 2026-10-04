@@ -13,6 +13,16 @@ import {
 } from '../features/finance.js';
 import { dashboardConfigured } from '../lib/firestore.js';
 import { isAuthorized } from '../lib/access.js';
+import { scheduleExpire, cancelExpire } from '../lib/expire.js';
+
+/** Like interaction.update(), but also keeps the Focus card's "don't expire"
+ *  property in sync with whatever this edit just put on screen — leaving
+ *  Focus for another card resumes the normal 1-minute countdown from now. */
+async function updateView(interaction, view, { persistent = false } = {}) {
+  await interaction.update(view);
+  if (persistent) cancelExpire(interaction.message);
+  else scheduleExpire(interaction.message);
+}
 
 function amountModal(action, bankKey, bucketKey) {
   const input = new TextInputBuilder()
@@ -33,20 +43,20 @@ function amountModal(action, bankKey, bucketKey) {
 async function handleButton(interaction) {
   const id = interaction.customId;
 
-  if (id === 'bommy:home') return interaction.update(buildHubView());
-  if (id === 'bommy:water') return interaction.update(await buildWaterView());
-  if (id === 'bommy:focus') return interaction.update(await buildFocusView());
-  if (id === 'bommy:finance') return interaction.update(await buildFinanceHomeView());
+  if (id === 'bommy:home') return updateView(interaction, buildHubView());
+  if (id === 'bommy:water') return updateView(interaction, await buildWaterView());
+  if (id === 'bommy:focus') return updateView(interaction, await buildFocusView(), { persistent: true });
+  if (id === 'bommy:finance') return updateView(interaction, await buildFinanceHomeView());
 
-  if (id === 'water:add') { await addGlass(); return interaction.update(await buildWaterView()); }
-  if (id === 'water:undo') { await undoGlass(); return interaction.update(await buildWaterView()); }
-  if (id === 'water:fridayoptin') { await optInFriday(); return interaction.update(await buildWaterView()); }
+  if (id === 'water:add') { await addGlass(); return updateView(interaction, await buildWaterView()); }
+  if (id === 'water:undo') { await undoGlass(); return updateView(interaction, await buildWaterView()); }
+  if (id === 'water:fridayoptin') { await optInFriday(); return updateView(interaction, await buildWaterView()); }
 
-  if (id === 'focus:refresh') return interaction.update(await buildFocusView());
+  if (id === 'focus:refresh') return updateView(interaction, await buildFocusView(), { persistent: true });
 
   if (id === 'focus:done') {
     const result = await doneFocusRemote();
-    await interaction.update(await buildFocusView());
+    await updateView(interaction, await buildFocusView(), { persistent: true });
     if (result.ok) {
       // Same "session logged" notice the System itself posts on every real
       // save — not ephemeral, not auto-expired, exactly like the real one.
@@ -66,21 +76,21 @@ async function handleButton(interaction) {
   }[id];
   if (focusAction) {
     const result = await focusAction();
-    await interaction.update(await buildFocusView());
+    await updateView(interaction, await buildFocusView(), { persistent: true });
     if (!result.ok) await interaction.followUp({ content: result.message, ephemeral: true });
     return;
   }
 
-  if (id === 'finance:home') return interaction.update(await buildFinanceHomeView());
-  if (id === 'finance:banks') return interaction.update(await buildBanksView());
-  if (id === 'finance:buckets') return interaction.update(await buildBucketsView());
+  if (id === 'finance:home') return updateView(interaction, await buildFinanceHomeView());
+  if (id === 'finance:banks') return updateView(interaction, await buildBanksView());
+  if (id === 'finance:buckets') return updateView(interaction, await buildBucketsView());
   if (id.startsWith('finance:bank:')) {
     const key = id.split(':')[2];
-    if (isKnownBank(key)) return interaction.update(await buildBankView(key));
+    if (isKnownBank(key)) return updateView(interaction, await buildBankView(key));
   }
   if (id.startsWith('finance:deposit:') || id.startsWith('finance:withdraw:')) {
     const [, action, key] = id.split(':');
-    if (isKnownBank(key)) return interaction.update(await buildBucketChoiceView(action, key));
+    if (isKnownBank(key)) return updateView(interaction, await buildBucketChoiceView(action, key));
   }
   if (id.startsWith('finance:amount:')) {
     const [, , action, bankKey, bucketKey] = id.split(':');

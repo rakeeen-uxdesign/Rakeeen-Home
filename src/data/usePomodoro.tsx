@@ -53,40 +53,70 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Checkpoint of the in-progress timer, so a reload/crash mid-session doesn't
   // silently lose everything since the last completed session (see incident:
   // ~5h of focus lost because nothing is persisted until "take a break"/"save").
-  const [checkpoint, setCheckpoint] = useFirebaseSync<{
+  //
+  // `writtenBy` tags which tab/actor last wrote this checkpoint — a random id
+  // generated once per tab load, or the fixed string the Discord bot uses.
+  // It's what lets this tab tell "that's just my own periodic write echoing
+  // back through Firestore's realtime listener" apart from "something else
+  // (another device, the bot) genuinely changed this" — see the adoption
+  // effect below. Comparing raw *values* instead doesn't work: a remote pause
+  // one second after a remote start writes a checkpoint value this tab could
+  // easily have produced itself, so there's no way to tell them apart without
+  // an explicit origin marker.
+  type Checkpoint = {
     timeLeft: number; overtime: number; isOvertime: boolean; running: boolean; mode: 'focus' | 'break';
-  } | null>('pomodoro_checkpoint', null);
+    writtenBy?: string;
+  };
+  const [checkpoint, setCheckpoint, checkpointReady] = useFirebaseSync<Checkpoint | null>('pomodoro_checkpoint', null);
   const hydratedFromCheckpoint = useRef(false);
-
-  // Mirrors whether this tab is sitting idle right now, kept fresh via its own
-  // effect (same ref pattern as checkpointStateRef below) so the
-  // checkpoint-adoption effect can read it synchronously without adding
-  // running/isOvertime/timeLeft/mode to its own deps.
-  const isLocallyIdleRef = useRef(true);
-  useEffect(() => {
-    isLocallyIdleRef.current = !running && !isOvertime && mode === 'focus' && timeLeft === FOCUS;
-  }, [running, isOvertime, mode, timeLeft, FOCUS]);
+  const instanceIdRef = useRef<string>(crypto.randomUUID());
 
   // On first mount, always adopt whatever checkpoint exists (reload/crash
-  // recovery — the original purpose of this effect). After that, keep
-  // adopting LATER checkpoint changes too, but only while this tab is
-  // sitting idle — that's what makes a session started remotely (the
-  // Discord bot) show up here within moments instead of needing a manual
-  // reload, while a tab that's already mid-session keeps ticking on its own
-  // local clock instead of getting yanked back to a stale snapshot every
-  // time its own ~45s periodic checkpoint write echoes back through
-  // Firestore's realtime listener.
+  // recovery). After that, keep adopting LATER checkpoint changes too — but
+  // skip ones this exact tab just wrote itself (its own echo, nothing new to
+  // apply). Anything genuinely external — another device, the Discord bot —
+  // is adopted immediately and unconditionally, which is what makes a remote
+  // Start/Pause/Resume/Done actually take effect on an already-open tab
+  // instead of needing a reload, even mid-session.
+  //
+  // Two things this effect must get right, both found the hard way:
+  //
+  // 1. Wait for `checkpointReady`. useFirebaseSync seeds `checkpoint` from
+  //    localStorage synchronously on mount, before Firestore has actually
+  //    confirmed anything — acting on that pre-confirmation value is acting
+  //    on a cache that might be stale (e.g. a leftover "running" snapshot
+  //    from a session that's since ended on another device). Worse: once
+  //    adopted, this tab's own heartbeat writes a fresh `updatedAt` within
+  //    seconds, which then makes useFirebaseSync's "newest write wins" merge
+  //    permanently reject Firestore's real (older, by then) correction —
+  //    the stale session never self-heals, it just keeps ticking. Only once
+  //    `checkpointReady` is true does `checkpoint` reflect what Firestore
+  //    actually has.
+  //
+  // 2. `null` is a real, meaningful value (idle), not "nothing to do yet" —
+  //    it must be applied too, not skipped, so a genuine external clear
+  //    (Discord's Discard, this tab's own stale adoption self-correcting)
+  //    actually takes local state back to idle instead of leaving it as
+  //    whatever it was.
   useEffect(() => {
+    if (!checkpointReady) return;
     const isFirstRun = !hydratedFromCheckpoint.current;
     hydratedFromCheckpoint.current = true;
-    if (!checkpoint) return;
-    if (!isFirstRun && !isLocallyIdleRef.current) return;
+    if (!isFirstRun && checkpoint?.writtenBy === instanceIdRef.current) return;
+    if (!checkpoint) {
+      setTimeLeft(FOCUS);
+      setOvertime(0);
+      setIsOvertime(false);
+      setMode('focus');
+      setRunning(false);
+      return;
+    }
     setTimeLeft(checkpoint.timeLeft);
     setOvertime(checkpoint.overtime);
     setIsOvertime(checkpoint.isOvertime);
     setMode(checkpoint.mode);
     setRunning(checkpoint.running);
-  }, [checkpoint]);
+  }, [checkpoint, checkpointReady, FOCUS]);
 
   const setFocusDuration = useCallback((m: number) => {
     // Hardcoded default 25 minutes, ignoring changes
@@ -220,10 +250,14 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     checkpointStateRef.current = { timeLeft, overtime, isOvertime, running, mode };
   }, [timeLeft, overtime, isOvertime, running, mode]);
 
+  // 3s, not the original 45s: this is also the heartbeat a remote actor (the
+  // Discord bot) reads to know "how stale is this snapshot" — the shorter
+  // the interval, the less a remote Done/save can be off by. Cheap at this
+  // scale (at most ~1200 writes/hour of continuous running).
   useEffect(() => {
     if (!running) return;
-    const writeCheckpoint = () => setCheckpoint({ ...checkpointStateRef.current });
-    const intervalId = setInterval(writeCheckpoint, 45000);
+    const writeCheckpoint = () => setCheckpoint({ ...checkpointStateRef.current, writtenBy: instanceIdRef.current });
+    const intervalId = setInterval(writeCheckpoint, 3000);
     const onVisibilityChange = () => { if (document.visibilityState === 'hidden') writeCheckpoint(); };
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
@@ -232,8 +266,17 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, [running, setCheckpoint]);
 
-  const start = useCallback(() => setRunning(true), []);
-  const pause = useCallback(() => setRunning(false), []);
+  // start/pause also write the checkpoint immediately instead of waiting for
+  // the next periodic tick (up to 3s away) — so a Pause made here is visible
+  // to a remote reader (the bot) right away, not just "eventually".
+  const start = useCallback(() => {
+    setRunning(true);
+    setCheckpoint({ ...checkpointStateRef.current, running: true, writtenBy: instanceIdRef.current });
+  }, [setCheckpoint]);
+  const pause = useCallback(() => {
+    setRunning(false);
+    setCheckpoint({ ...checkpointStateRef.current, running: false, writtenBy: instanceIdRef.current });
+  }, [setCheckpoint]);
 
   const reset = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -268,7 +311,11 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setOvertime(0);
     setTimeLeft(calculatedBreakMins * 60);
     setRunning(true);
-  }, [overtime, weekStats, todayIdx, setWeekStats, focusDuration, sendDiscordNotification]);
+    setCheckpoint({
+      timeLeft: calculatedBreakMins * 60, overtime: 0, isOvertime: false, mode: 'break', running: true,
+      writtenBy: instanceIdRef.current,
+    });
+  }, [overtime, weekStats, todayIdx, setWeekStats, focusDuration, sendDiscordNotification, setCheckpoint]);
 
   const startNewSession = useCallback(() => {
     setMode('focus');
@@ -276,7 +323,8 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setOvertime(0);
     setTimeLeft(FOCUS);
     setRunning(true);
-  }, [FOCUS]);
+    setCheckpoint({ timeLeft: FOCUS, overtime: 0, isOvertime: false, mode: 'focus', running: true, writtenBy: instanceIdRef.current });
+  }, [FOCUS, setCheckpoint]);
 
   const skipBreak = useCallback(() => {
     setMode('focus');
@@ -312,7 +360,11 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setOvertime(0);
     setTimeLeft(calculatedBreakMins * 60);
     setRunning(true);
-  }, [mode, focusDuration, timeLeft, overtime, weekStats, todayIdx, setWeekStats, sendDiscordNotification, setLogs]);
+    setCheckpoint({
+      timeLeft: calculatedBreakMins * 60, overtime: 0, isOvertime: false, mode: 'break', running: true,
+      writtenBy: instanceIdRef.current,
+    });
+  }, [mode, focusDuration, timeLeft, overtime, weekStats, todayIdx, setWeekStats, sendDiscordNotification, setLogs, setCheckpoint]);
 
   // Focus is locked Isha→Fajr (Pomodoro.tsx's `nightLocked`), but that lock only blocks
   // *starting* a new session — a session already running (or sitting in overtime) when

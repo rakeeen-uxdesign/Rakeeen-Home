@@ -10,6 +10,15 @@ const FOCUS_MINUTES = 25;
 const FOCUS_SECONDS = FOCUS_MINUTES * 60;
 const DEFAULT_WEEK = Array.from({ length: 7 }, () => ({ sessions: 0, minutes: 0 }));
 
+// Fixed "writer" tag this bot puts on every checkpoint it writes — see
+// `writtenBy` in usePomodoro.tsx. A real tab's own writes carry a random
+// per-tab id instead, so an open tab can tell "my own write echoing back"
+// apart from "the bot (or another device) genuinely changed this" and
+// adopts the latter immediately, even mid-session. That's what makes
+// Pause/Resume/Done from here actually take effect live instead of racing
+// an open tab's own ticking and silently losing, or double-saving, history.
+const WRITER = 'discord-bot';
+
 // Ported from src/domain/focus/session.ts — a break is 20% of the focus time
 // just completed, rounded, never shorter than a minute.
 const breakMinutesFor = (focusGainedMinutes) => Math.max(1, Math.round(focusGainedMinutes * 0.2));
@@ -47,6 +56,10 @@ async function readCheckpoint() {
   return getDashboardValue('pomodoro_checkpoint', null);
 }
 
+function writeCheckpoint(state) {
+  return setDashboardValue('pomodoro_checkpoint', state === null ? null : { ...state, writtenBy: WRITER });
+}
+
 export async function buildFocusView() {
   const [week, sessions, checkpoint, blockedReason] = await Promise.all([
     getDashboardValue('pomodoro_week', DEFAULT_WEEK),
@@ -79,10 +92,10 @@ export async function buildFocusView() {
   }
   if (idle && blockedReason) status = blockedReason;
 
-  // "Live" here means accurate as of this snapshot (the card's own
-  // timestamp), not literally ticking down in the message — Discord has no
-  // way to animate a sent message, and these cards self-delete in a minute
-  // anyway. Hit Refresh for the current number.
+  // "Live" means current as of this snapshot — an open tab heartbeats its
+  // state here every ~3s (immediately on any action), so this is seconds-
+  // fresh, not the up-to-45s-stale reading it used to be. Discord still can't
+  // animate a sent message on its own, so hit Refresh to re-pull the number.
   const rows = [['Sessions today', String(sessions || 0), true]];
   if (!liveBig) rows.push(['Focused today', formatDurationText(minutesToday), true]);
 
@@ -125,16 +138,14 @@ export async function startFocusRemote() {
   if (!isIdle(checkpoint)) {
     return { ok: false, message: 'A focus session is already in progress.' };
   }
-  await setDashboardValue('pomodoro_checkpoint', {
-    timeLeft: FOCUS_SECONDS, overtime: 0, isOvertime: false, running: true, mode: 'focus',
-  });
+  await writeCheckpoint({ timeLeft: FOCUS_SECONDS, overtime: 0, isOvertime: false, running: true, mode: 'focus' });
   return { ok: true };
 }
 
 export async function pauseFocusRemote() {
   const cp = await readCheckpoint();
   if (!cp || !cp.running || cp.mode === 'break') return { ok: false, message: 'Nothing running to pause.' };
-  await setDashboardValue('pomodoro_checkpoint', { ...cp, running: false });
+  await writeCheckpoint({ ...cp, running: false });
   return { ok: true };
 }
 
@@ -143,7 +154,7 @@ export async function resumeFocusRemote() {
   if (!cp || cp.running || cp.mode === 'break' || isIdle(cp)) return { ok: false, message: 'Nothing paused to resume.' };
   const blockedReason = await isStartBlocked();
   if (blockedReason) return { ok: false, message: blockedReason };
-  await setDashboardValue('pomodoro_checkpoint', { ...cp, running: true });
+  await writeCheckpoint({ ...cp, running: true });
   return { ok: true };
 }
 
@@ -176,9 +187,7 @@ export async function doneFocusRemote() {
   );
   await setDashboardValue('pomodoro_week', updatedWeek);
 
-  await setDashboardValue('pomodoro_checkpoint', {
-    timeLeft: breakMins * 60, overtime: 0, isOvertime: false, running: true, mode: 'break',
-  });
+  await writeCheckpoint({ timeLeft: breakMins * 60, overtime: 0, isOvertime: false, running: true, mode: 'break' });
   // Caller (router.js) uses these to post the same "session logged" notice the
   // real system sends on every save — same fields (base 25m + raw overtime),
   // so a save from here looks like a save from the System, not a lesser copy.
@@ -206,13 +215,13 @@ export function buildSessionLoggedNotice(focusGained, overtimeSeconds) {
 export async function discardFocusRemote() {
   const cp = await readCheckpoint();
   if (!cp || isIdle(cp)) return { ok: false, message: 'Nothing to discard.' };
-  await setDashboardValue('pomodoro_checkpoint', null);
+  await writeCheckpoint(null);
   return { ok: true };
 }
 
 export async function skipBreakFocusRemote() {
   const cp = await readCheckpoint();
   if (!cp || cp.mode !== 'break') return { ok: false, message: 'Not on a break.' };
-  await setDashboardValue('pomodoro_checkpoint', null);
+  await writeCheckpoint(null);
   return { ok: true };
 }

@@ -3,7 +3,7 @@ import { buildHubView } from '../features/hub.js';
 import { buildWaterView } from '../features/water.js';
 import { buildFocusView } from '../features/focus.js';
 import { buildHomeView as buildFinanceHomeView } from '../features/finance.js';
-import { scheduleExpire } from '../lib/expire.js';
+import { scheduleExpire, cancelExpire } from '../lib/expire.js';
 import { dashboardConfigured } from '../lib/firestore.js';
 
 const NOT_CONFIGURED = {
@@ -12,13 +12,18 @@ const NOT_CONFIGURED = {
   components: [],
 };
 
-async function reply(interaction, view) {
+async function reply(interaction, view, { persistent = false } = {}) {
   if (!dashboardConfigured()) {
     await interaction.reply({ ...NOT_CONFIGURED, ephemeral: true });
     return;
   }
   await interaction.reply(view);
-  scheduleExpire(await interaction.fetchReply());
+  const message = await interaction.fetchReply();
+  // Focus is the one card meant to be left open and checked back on (status,
+  // Start, Discard) rather than glanced at once — so it's the only one that
+  // doesn't self-delete.
+  if (persistent) cancelExpire(message);
+  else scheduleExpire(message);
 }
 
 // setDefaultMemberPermissions('0') hides these from the slash-command
@@ -40,7 +45,7 @@ export const commands = [
   },
   {
     data: ownerOnly(new SlashCommandBuilder().setName('focus').setDescription('Focus session status')),
-    execute: async (i) => reply(i, await buildFocusView()),
+    execute: async (i) => reply(i, await buildFocusView(), { persistent: true }),
   },
   {
     data: ownerOnly(new SlashCommandBuilder().setName('finance').setDescription('Finance overview')),
