@@ -11,6 +11,8 @@ import {
 import { usePomodoro } from '@/data/usePomodoro';
 import { useRingAnimation } from '@/ui/useRingAnimation';
 import { WavyRing } from '@/ui/TimerComponents';
+import { PixelDigits, PixelClock } from '@/ui/PixelFocusDisplay';
+import { FocusCarousel } from '@/ui/FocusCarousel';
 import { useFridayGate } from '@/data/useFridayGate';
 import { usePrayer } from '@/data/usePrayer';
 
@@ -291,22 +293,47 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
               </span>
             </div>
 
-            {/* Timer Circle */}
-            <div className="relative w-full max-w-[300px] aspect-square mx-auto flex items-center justify-center">
-              <div className="absolute inset-6 rounded-full blur-[40px] opacity-20 -z-10 transition-colors duration-1000" style={{ backgroundColor: getTimerColor() }} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <WavyRing pct={smoothRingPct} phase={phase} mode={mode} isOvertime={isOvertime} size={300} waves={mode === 'focus' ? focusDuration : breakDuration} rotation={ringRotation} />
-              </div>
+            {/* Timer — two faces of the same state, swipe between them */}
+            {(() => {
+              const secs = isOvertime ? overtime : timeLeft;
+              const totalMins = Math.floor(secs / 60);
+              const pixelMM = totalMins >= 100 ? String(totalMins) : String(totalMins).padStart(2, '0');
+              const pixelSS = String(secs % 60).padStart(2, '0');
 
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-4xl sm:text-5xl font-black mb-1 transition-colors duration-500 text-ink">
-                  {isOvertime ? `+${formatTime(overtime)}` : formatTime(timeLeft)}
-                </span>
-                <span className="text-[10px] tracking-[0.3em] font-bold text-ink/40 uppercase">
-                  {isOvertime ? 'Overtime' : mode}
-                </span>
-              </div>
-            </div>
+              return (
+                <FocusCarousel
+                  dotColor={getTimerColor()}
+                  pages={[
+                    <div className="relative w-full max-w-[300px] aspect-square mx-auto flex items-center justify-center">
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <WavyRing pct={smoothRingPct} phase={phase} mode={mode} isOvertime={isOvertime} size={300} waves={mode === 'focus' ? focusDuration : breakDuration} rotation={ringRotation} />
+                      </div>
+
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-4xl sm:text-5xl font-black mb-1 transition-colors duration-500 text-ink">
+                          {isOvertime ? `+${formatTime(overtime)}` : formatTime(timeLeft)}
+                        </span>
+                        <span className="text-[10px] tracking-[0.3em] font-bold text-ink/40 uppercase">
+                          {isOvertime ? 'Overtime' : mode}
+                        </span>
+                      </div>
+                    </div>,
+                    <div className="w-full min-h-[300px] flex items-center justify-center gap-6 sm:gap-10">
+                      <div className="shrink-0">
+                        <PixelClock
+                          elapsedSeconds={isOvertime ? FOCUS_S + overtime : (mode === 'focus' ? FOCUS_S : BREAK_S) - timeLeft}
+                          mode={mode}
+                          running={running}
+                          isOvertime={isOvertime}
+                          width="clamp(96px, 22vw, 168px)"
+                        />
+                      </div>
+                      <PixelDigits mm={pixelMM} ss={pixelSS} color={getTimerColor()} maxWidth="min(52vw, 340px)" />
+                    </div>,
+                  ]}
+                />
+              );
+            })()}
 
             <div className="relative flex justify-center mt-6 select-none">
               <span className="text-[10px] uppercase tracking-[0.2em] font-black text-ink/30">

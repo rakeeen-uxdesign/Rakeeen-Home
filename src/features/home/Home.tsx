@@ -17,6 +17,8 @@ import { useSleepLock } from '@/data/useSleepLock';
 import { useFridayGate } from '@/data/useFridayGate';
 import { DotMatrixText } from '@/ui/DotMatrixText';
 import { DMTimer, WavyRing } from '@/ui/TimerComponents';
+import { PixelDigits, PixelClock } from '@/ui/PixelFocusDisplay';
+import { FocusCarousel } from '@/ui/FocusCarousel';
 import {
   MaskedValue, SidebarActiveVector, WaterVector, FocusVector, FinanceVector, MonthFingerprint,
 } from '@/features/home/components/visuals';
@@ -786,7 +788,8 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                         </span>
                       </div>
 
-                      {/* Middle — ring (same motion as the full Focus page) beside the dot-matrix countdown */}
+                      {/* Middle — ring (same motion as the full Focus page) beside the dot-matrix
+                          countdown, swipeable with a second pixel-art face */}
                       {(() => {
                         const secs = pomodoroOvertime ? overtime : timeLeft;
                         const totalMins = Math.floor(secs / 60);
@@ -794,19 +797,38 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                         const ss = String(secs % 60).padStart(2, '0');
                         const col = pomodoroOvertime ? 'var(--pomo-overtime)' : mode === 'break' ? 'var(--pomo-break)' : 'var(--pomo-focus)';
                         return (
-                          <div className="flex-1 flex items-center justify-center gap-6 w-full">
-                            <div className="shrink-0 w-[110px] h-[110px] sm:w-[140px] sm:h-[140px]">
-                              <WavyRing
-                                pct={focusRingSmoothPct}
-                                phase={focusRingPhase}
-                                mode={mode}
-                                isOvertime={pomodoroOvertime}
-                                size={140}
-                                waves={mode === 'focus' ? focusDuration : breakDuration}
-                                rotation={focusRingRotation}
-                              />
-                            </div>
-                            <DMTimer mm={mm} ss={ss} color={col} maxWidth="min(100%, 340px)" />
+                          <div className="flex-1 flex items-center justify-center w-full">
+                            <FocusCarousel
+                              dotColor={col}
+                              pages={[
+                                <div className="flex items-center justify-center gap-6 w-full">
+                                  <div className="shrink-0 w-[110px] h-[110px] sm:w-[140px] sm:h-[140px]">
+                                    <WavyRing
+                                      pct={focusRingSmoothPct}
+                                      phase={focusRingPhase}
+                                      mode={mode}
+                                      isOvertime={pomodoroOvertime}
+                                      size={140}
+                                      waves={mode === 'focus' ? focusDuration : breakDuration}
+                                      rotation={focusRingRotation}
+                                    />
+                                  </div>
+                                  <DMTimer mm={mm} ss={ss} color={col} maxWidth="min(100%, 340px)" />
+                                </div>,
+                                <div className="flex items-center justify-center gap-6 w-full">
+                                  <div className="shrink-0">
+                                    <PixelClock
+                                      elapsedSeconds={pomodoroOvertime ? pomodoroTotalSecs + overtime : pomodoroTotalSecs - timeLeft}
+                                      mode={mode}
+                                      running={pomodoroRunning}
+                                      isOvertime={pomodoroOvertime}
+                                      width="clamp(84px, 14vw, 128px)"
+                                    />
+                                  </div>
+                                  <PixelDigits mm={mm} ss={ss} color={col} maxWidth="min(100%, 300px)" />
+                                </div>,
+                              ]}
+                            />
                           </div>
                         );
                       })()}
