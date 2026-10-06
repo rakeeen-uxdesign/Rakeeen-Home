@@ -28,7 +28,8 @@ interface HomeProps {
 }
 
 // Persists last active card so remount starts on the correct card instantly
-let _lastActiveCardId: 'water' | 'pomodoro' | 'finance' = 'water';
+type CardId = 'water' | 'pomodoro' | 'finance';
+let _lastActiveCardId: CardId = 'water';
 // Persists greeting name so it doesn't change on every remount
 const _NAMES = ['Hamed', 'Ghorab', 'Shahyn', 'Rakeeen'];
 let _persistedGreetingName = _NAMES[Math.floor(Math.random() * _NAMES.length)];
@@ -36,13 +37,13 @@ let _persistedGreetingName = _NAMES[Math.floor(Math.random() * _NAMES.length)];
 
 
 export const Home: React.FC<HomeProps> = ({ navigate }) => {
-  const [activeCardId, setActiveCardId] = useState<'water' | 'pomodoro' | 'finance'>(() => _lastActiveCardId);
-  const [displayedCardId, setDisplayedCardId] = useState<'water' | 'pomodoro' | 'finance'>(() => _lastActiveCardId);
+  const [activeCardId, setActiveCardId] = useState<CardId>(() => _lastActiveCardId);
+  const [displayedCardId, setDisplayedCardId] = useState<CardId>(() => _lastActiveCardId);
   const [bigCardVisible, setBigCardVisible] = useState(false);
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
   const [lastManualClickTime, setLastManualClickTime] = useState<number>(0);
   // systemCardId tracks which card has system priority — independent of what user is viewing
-  const [systemCardId, setSystemCardId] = useState<'water' | 'pomodoro' | 'finance' | null>(null);
+  const [systemCardId, setSystemCardId] = useState<CardId | null>(null);
   const [avatarUrl, setAvatarUrl] = useFirebaseSync<string | null>('avatar_url', null);
   const [glasses, setGlasses] = useFirebaseSync<number>('hydration_glasses', 0);
   const [financeBanks] = useFirebaseSync<Record<string, number>>('finance_banks', {});
@@ -799,6 +800,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                         return (
                           <div className="flex-1 flex items-center justify-center w-full">
                             <FocusCarousel
+                persistKey="focus_face"
                               dotColor={col}
                               pages={[
                                 <div className="flex items-center justify-center gap-6 w-full">

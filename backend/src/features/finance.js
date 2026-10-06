@@ -7,8 +7,8 @@ import { card, row, ButtonStyle } from '../lib/ui.js';
 // (BANK_LABELS, BUCKET_META) and src/features/finance/useFinance.ts (defaults).
 const BANK_LABELS = { cib: 'CIB', ahly_main: 'Ahly Main', ahly_meeza: 'Ahly Meeza', bm: 'Banque Misr' };
 const DEFAULT_BANKS = { cib: 0, ahly_main: 0, ahly_meeza: 0, bm: 0 };
-const BUCKET_LABELS = { tawarr2: "Tawarru'", mustaqbal: 'Future', basmala: 'Basmala', sadaqa: 'Sadaqa' };
-const DEFAULT_BUCKETS = { tawarr2: 0, mustaqbal: 0, basmala: 0, sadaqa: 0 };
+const BUCKET_LABELS = { tawarr2: "Tawarru'", mustaqbal: 'Future', basmala: 'Basmala', mariam: 'Mariam', sadaqa: 'Sadaqa' };
+const DEFAULT_BUCKETS = { tawarr2: 0, mustaqbal: 0, basmala: 0, mariam: 0, sadaqa: 0 };
 
 const sum = (obj) => Object.values(obj).reduce((a, b) => a + (b || 0), 0);
 

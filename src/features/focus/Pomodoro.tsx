@@ -302,6 +302,7 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
 
               return (
                 <FocusCarousel
+                persistKey="focus_face"
                   dotColor={getTimerColor()}
                   pages={[
                     <div className="relative w-full max-w-[300px] aspect-square mx-auto flex items-center justify-center">

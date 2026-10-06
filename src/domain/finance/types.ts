@@ -11,6 +11,7 @@ export interface FinanceBuckets {
   tawarr2: number;
   mustaqbal: number;
   basmala: number;
+  mariam: number;
   sadaqa: number;
 }
 

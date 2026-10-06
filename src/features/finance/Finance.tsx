@@ -512,7 +512,7 @@ export const Finance: React.FC<FinanceProps> = ({ navigate }) => {
           <section className="space-y-6">
             <p className="font-mono-main text-[11px] font-bold tracking-[0.25em] uppercase text-ink/40 mb-4">VIRTUAL BUCKETS</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {(['mustaqbal', 'tawarr2', 'basmala', 'sadaqa'] as Array<keyof FinanceBuckets>).map(key => {
+              {(['mustaqbal', 'tawarr2', 'basmala', 'mariam', 'sadaqa'] as Array<keyof FinanceBuckets>).map(key => {
                 const meta = BUCKET_META[key];
                 const Vector = BUCKET_VECTORS[key];
                 const value = key === 'mustaqbal'

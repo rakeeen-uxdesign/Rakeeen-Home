@@ -10,6 +10,16 @@ const COMMIT_FRACTION = 0.18;
 // the stream (and so the gesture) has ended.
 const WHEEL_IDLE_MS = 90;
 
+function readStoredIndex(key: string | undefined, count: number): number {
+  if (!key) return 0;
+  try {
+    const stored = Number(window.localStorage.getItem(key));
+    return Number.isInteger(stored) && stored >= 0 && stored < count ? stored : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * A horizontally swipeable set of pages with dot indicators underneath —
  * the Focus ring and the pixel-art face as two faces of the same card, on
@@ -24,13 +34,16 @@ const WHEEL_IDLE_MS = 90;
 export const FocusCarousel: React.FC<{
   pages: React.ReactNode[];
   dotColor?: string;
-}> = ({ pages, dotColor }) => {
+  /** localStorage key to remember the page you were on — pass the same key
+   *  everywhere the carousel appears so they all open on your last face. */
+  persistKey?: string;
+}> = ({ pages, dotColor, persistKey }) => {
   const count = pages.length;
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const widthRef = useRef(0);
-  const [index, setIndex] = useState(0);
-  const indexRef = useRef(0);
+  const [index, setIndex] = useState(() => readStoredIndex(persistKey, count));
+  const indexRef = useRef(index);
   const x = useMotionValue(0);
 
   // The active dot follows wherever the content actually is — the nearest
@@ -48,8 +61,11 @@ export const FocusCarousel: React.FC<{
   const goTo = useCallback((i: number) => {
     const clamped = Math.max(0, Math.min(count - 1, i));
     indexRef.current = clamped;
+    if (persistKey) {
+      try { window.localStorage.setItem(persistKey, String(clamped)); } catch { /* storage unavailable — just don't remember */ }
+    }
     animate(x, -clamped * widthRef.current, SPRING);
-  }, [count, x]);
+  }, [count, x, persistKey]);
 
   // Track the container width so page offsets stay in pixels (and snap
   // correctly) across resizes.
