@@ -13,23 +13,36 @@ import { useRingAnimation } from '@/ui/useRingAnimation';
 import { AppModal } from '@/ui/AppModal';
 import { getLogicalDate } from '@/domain/day';
 import { usePrayer } from '@/data/usePrayer';
+import { getDayPhase } from '@/domain/devotion/prayer';
+import { getOccasionLine } from '@/domain/devotion/occasion';
+import {
+  daysSinceActive, getAbsenceLine, getLiveFocusLine, getProgressLine, getWeatherLine, pickGreetingLine,
+} from '@/domain/greeting';
+import { getClockParts, HOME_TIME_ZONE } from '@/domain/clock';
+import { useWeather } from '@/data/useWeather';
 import { useSleepLock } from '@/data/useSleepLock';
 import { useFridayGate } from '@/data/useFridayGate';
 import { DotMatrixText } from '@/ui/DotMatrixText';
 import { DMTimer, WavyRing } from '@/ui/TimerComponents';
 import { PixelDigits, PixelClock } from '@/ui/PixelFocusDisplay';
+import { PixelDateTile } from '@/ui/PixelCalendar';
+import { getDateParts } from '@/domain/month';
 import { FocusCarousel } from '@/ui/FocusCarousel';
 import {
-  MaskedValue, SidebarActiveVector, WaterVector, FocusVector, FinanceVector, MonthFingerprint,
+  MaskedValue, SidebarActiveVector, WaterVector, FocusVector, FinanceVector, TimeVector, MonthFingerprint,
 } from '@/features/home/components/visuals';
+import { TimeCardBody } from '@/features/home/components/TimeCard';
 
 interface HomeProps {
   navigate: (to: string) => void;
 }
 
+// How long a manually-picked card stays before the dock snaps back to the system's pick.
+const CARD_REVERT_MS = 30_000;
+
 // Persists last active card so remount starts on the correct card instantly
-type CardId = 'water' | 'pomodoro' | 'finance';
-let _lastActiveCardId: CardId = 'water';
+type CardId = 'time' | 'water' | 'pomodoro' | 'finance';
+let _lastActiveCardId: CardId = 'time';
 // Persists greeting name so it doesn't change on every remount
 const _NAMES = ['Hamed', 'Ghorab', 'Shahyn', 'Rakeeen'];
 let _persistedGreetingName = _NAMES[Math.floor(Math.random() * _NAMES.length)];
@@ -350,50 +363,52 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   }, [activeCardId]);
 
 
+  // `times` drives the real Fajr-based water lock and the header line's time-of-day phrases;
+  // the "Devotion" card/page and its next-prayer display were removed (2026-09) — you
+  // don't need the app to tell you when to pray.
+  const { times, hijriDate, nextPrayer } = usePrayer();
+  const weather = useWeather();
+
   const [greetingName, setGreetingName] = useState(() => _persistedGreetingName);
 
   // No more hard lock — the system just calls it out when you're clearly up past Isha.
   const isSleepTime = useSleepLock();
-  const SLEEP_TEASE_LINES = [
-    'IT\'S PAST ISHA ... WHAT ARE YOU STILL DOING HERE ',
-    'THE OWLS ARE JUDGING YOU RIGHT NOW ',
-    'THIS ISN\'T FAJR, GO TO SLEEP ',
-    'SLEEP IS FREE, TRY IT SOMETIME ',
-  ];
   const isFriday = now.getDay() === 5;
 
-  // Schedule: Fajr wake (~4:30am), workout 9am (daily except Fri/Sat), Isha sleep (~21:30)
-  const getGreeting = (h: number): { before: string; name: string; after: string } => {
-    const n = greetingName.toUpperCase();
-    // Data-aware: check most notable condition first
-    // Water tracking is closed 18:00-Fajr (locked, counter reset) — nagging about low
-    // water in that window makes no sense since adding more isn't even possible.
-    const waterLow = typeof glasses === 'number' && glasses < 3 && h >= 10 && h < 18;
-    const noFocus = focusMinutes === 0 && !pomodoroRunning && h >= 13 && h < 19;
-
-    let before = '';
-    if (isSleepTime)         before = SLEEP_TEASE_LINES[Math.floor(now.getMinutes() / 15) % SLEEP_TEASE_LINES.length];
-    else if (weekPattern === 'momentum')     before = 'THREE DAYS LOCKED IN ... KEEP THE RIVER MOVING ';
-    else if (weekPattern === 'slump')   before = 'THE RIVER HAS BEEN LOW ALL WEEK ... ';
-    else if (weekPattern === 'rising')  before = 'SOMETHING IS SHIFTING ... DON\'T STOP NOW ';
-    else if (weekPattern === 'fading')  before = 'HAWK HAS BEEN DRIFTING ... COME BACK ';
-    else if (waterLow)       before = 'RIVER IS LOW TODAY ... DRINK UP ';
-    else if (noFocus)        before = 'HAWK HASN\'T MOVED YET ... ';
-    else if (isFriday)       before = 'JUMU\'AH MUBARAK ... READ YOUR KAHF ';
-    else if (h >= 0  && h < 4)  before = 'DEEP NIGHT ... REST WELL ';
-    else if (h >= 4  && h < 5)  before = 'FAJR HOUR ... THE BEST START ';
-    else if (h >= 5  && h < 9)  before = 'MORNING LOCKED IN ... BUILD IT ';
-    else if (h >= 9  && h < 11) before = 'THE LION IS HUNTING ... KEEP MOVING ';
-    else if (h >= 11 && h < 13) before = 'BEES BEEN OUT FOR HOURS ... YOUR TURN ';
-    else if (h >= 13 && h < 17) before = 'PUSH WHILE THE SUN\'S STILL UP ... ';
-    else if (h >= 17 && h < 19) before = 'BIRDS HEADING HOME ... WRAP IT UP ';
-    else if (h >= 19 && h < 20) before = 'GOLDEN HOUR ... CATCH THE LIGHT ';
-    else if (h >= 20 && h < 21) before = 'ISHA IS NEAR ... WIND DOWN ';
-    else                        before = 'NIGHT SETTLED ... REST WELL ';
-    return { before, name: n, after: '' };
+  // Phrases follow the real prayer times (getDayPhase), not fixed clock hours.
+  const getGreeting = (): { before: string; name: string; after: string } => {
+    // A focus session only reaches `focusMinutes` on Done, so count the running one on top.
+    const sessionActive = mode === 'focus' && (pomodoroRunning || pomodoroOvertime);
+    const sessionElapsedMin = sessionActive
+      ? Math.floor((pomodoroOvertime ? pomodoroTotalSecs + overtime : pomodoroTotalSecs - timeLeft) / 60)
+      : 0;
+    const phase = getDayPhase(times, now);
+    const before = pickGreetingLine({
+      phase,
+      liveFocus: sessionActive
+        ? getLiveFocusLine({
+            elapsedMin: sessionElapsedMin,
+            remainingMin: pomodoroOvertime ? 0 : timeLeft / 60,
+            savedTodayMin: focusMinutes,
+          })
+        : null,
+      prayerImminent: !!nextPrayer && nextPrayer.name !== 'Fajr' && nextPrayer.remainingMinutes < 10,
+      occasion: getOccasionLine(times, hijriDate, now),
+      isSleepTime,
+      absence: getAbsenceLine(daysSinceActive(dailyHistory, todayKey), !glasses && focusMinutes === 0 && !pomodoroRunning),
+      weekPattern,
+      weather: getWeatherLine(weather, phase),
+      progress: getProgressLine(glasses || 0, focusMinutes + sessionElapsedMin, phase),
+      glasses: glasses || 0,
+      focusMinutes,
+      focusRunning: pomodoroRunning,
+      isFriday,
+      now,
+    });
+    return { before, name: greetingName.toUpperCase(), after: '' };
   };
 
-  const greetingParts = getGreeting(now.getHours());
+  const greetingParts = getGreeting();
 
   const [displayedGreeting, setDisplayedGreeting] = useState(greetingParts);
   const [greetingVisible, setGreetingVisible] = useState(true);
@@ -432,17 +447,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
     };
   }, [journalEntry, greetingParts.before]);
 
-  const timeString = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
-  const [timeOnly, amPm] = timeString.split(' ');
-  
-  // `times` still drives the real Fajr-based water lock below; the "Devotion" card/page
-  // and its next-prayer display were removed (2026-09) — you don't need the app to tell
-  // you when to pray.
-  const { times } = usePrayer();
-
-  // Format English Date
-  const dateStringEn = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-
   // Day is archived/reset at the real Maghrib time (from the prayer API, refreshed daily)
   // and reopens at the real Fajr time — Water is locked in between. Falls back to fixed
   // clock times if prayer times haven't loaded yet. Computed here (not just below, near
@@ -464,18 +468,20 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   const { friday, includedToday } = useFridayGate(now);
   const focusFridayLocked = friday && !includedToday;
 
-  // Smart active card prioritizing logic. An active/overtime focus session always wins.
-  // Otherwise the default is Water — except while Water itself is locked (6pm–Fajr),
-  // when defaulting to it would just show a card you can't do anything with, so Focus
-  // takes over as the default for that whole window instead.
+  const timeCard = getClockParts(HOME_TIME_ZONE, now);
+
+  // Smart active card prioritizing logic. Time is the default and always wins before
+  // Fajr — even over a running focus session. After Fajr an active/overtime focus
+  // session takes over until it ends, then it's back to Time.
+  const beforeFajr = now < todayFajr;
   useEffect(() => {
     const priorityCardId: 'pomodoro' | null =
-      (pomodoroRunning || pomodoroOvertime || waterLocked) ? 'pomodoro' : null;
+      (!beforeFajr && (pomodoroRunning || pomodoroOvertime)) ? 'pomodoro' : null;
 
     // systemCardId tracks the priority card — always updated, user interaction doesn't clear it
-    setSystemCardId(priorityCardId ?? 'water');
+    setSystemCardId(priorityCardId ?? 'time');
 
-    const targetCardId = priorityCardId ?? 'water';
+    const targetCardId = priorityCardId ?? 'time';
 
     // First reveal
     if (!firstRevealDoneRef.current) {
@@ -487,18 +493,18 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
       return;
     }
 
-    // Subsequent auto-selects: only if user hasn't manually clicked in 1 min.
+    // Subsequent auto-selects: only if the user hasn't manually clicked in the last 30 s.
     // `now` (ticks every second, see the setInterval above) has to be a dependency
-    // here — otherwise nothing re-runs this effect once the minute has actually
+    // here — otherwise nothing re-runs this effect once the 30 s have actually
     // elapsed, and a manual click sticks forever instead of reverting.
-    if (now.getTime() - lastManualClickTime < 60000) return;
+    if (now.getTime() - lastManualClickTime < CARD_REVERT_MS) return;
     if (activeCardId !== targetCardId) {
       setActiveCardId(targetCardId);
     }
   }, [
     pomodoroRunning,
     pomodoroOvertime,
-    waterLocked,
+    beforeFajr,
     lastManualClickTime,
     activeCardId,
     now
@@ -611,7 +617,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
               title: 'Water',
               Vector: WaterVector,
               route: 'water',
-              isRunning: false,
               metric: `${glasses} / 12`,
               subText: 'GLASSES TODAY',
             },
@@ -620,7 +625,6 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
               title: 'Your Focus',
               Vector: FocusVector,
               route: 'pomodoro',
-              isRunning: false,
               metric: (pomodoroRunning || pomodoroOvertime || pomodoroPaused)
                 ? (pomodoroOvertime ? `+${Math.floor(overtime / 60)}m` : `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`)
                 : `${focusMinutes > 0 ? focusHours : '0'}h`,
@@ -631,9 +635,16 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
               title: 'Finance',
               Vector: FinanceVector,
               route: 'finance',
-              isRunning: false,
               metric: totalPhysical > 0 ? `${Math.round(totalPhysical).toLocaleString()}` : '—',
               subText: 'TOTAL BALANCE',
+            },
+            {
+              id: 'time',
+              title: 'Time',
+              Vector: TimeVector,
+              route: null,
+              metric: null, // drawn as dotted digits below instead of text
+              subText: 'EGYPT',
             },
           ] as const).map((card) => {
             const isActive = activeCardId === card.id;
@@ -647,7 +658,11 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                   setActiveCardId(card.id as any);
                   setLastManualClickTime(Date.now());
                 }}
-                onDoubleClick={() => navigate(card.route)}
+                // Water is the odd one out: double-click logs a glass instead of opening the page.
+                onDoubleClick={(e) => {
+                  if (card.id === 'water') addWaterCup(e);
+                  else if (card.route) navigate(card.route);
+                }}
                 onMouseEnter={() => setHoveredCardId(card.id)}
                 onMouseLeave={() => setHoveredCardId(null)}
                 className={`cursor-pointer transform-gpu relative select-none flex flex-col justify-between p-4 border ${
@@ -683,11 +698,18 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                   )}
                 </div>
                 <div className="mt-1 pointer-events-none">
-                  <span className="font-mono-main text-[16px] lg:text-[18px] font-black block truncate">
-                    {card.id === 'finance' && totalPhysical > 0
-                      ? <MaskedValue>{card.metric}</MaskedValue>
-                      : card.metric}
-                  </span>
+                  {card.id === 'time' ? (
+                    <span className="flex items-end gap-1.5 h-6 lg:h-[27px] pb-[5px]">
+                      <PixelDigits mm={timeCard.hour} ss={timeCard.minute} color="var(--ink)" height="14px" flush />
+                      <span className="font-mono-main text-[9px] font-bold text-ink/50 leading-none">{timeCard.period}</span>
+                    </span>
+                  ) : (
+                    <span className="font-mono-main text-[16px] lg:text-[18px] font-black block truncate">
+                      {card.id === 'finance' && totalPhysical > 0
+                        ? <MaskedValue>{card.metric}</MaskedValue>
+                        : card.metric}
+                    </span>
+                  )}
                   <span className={`font-mono-main text-[8px] lg:text-[9px] tracking-wider font-bold uppercase block truncate ${
                     isActive ? 'text-ink/50' : 'text-ink/40'
                   }`}>
@@ -708,7 +730,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
               className="hidden lg:block absolute -left-10 z-10 pointer-events-none"
               style={{ top: 0 }}
               animate={{
-                y: (124 - 22) / 2 + ['water', 'pomodoro', 'finance'].indexOf(systemCardId) * (124 + 16),
+                y: (124 - 22) / 2 + ['water', 'pomodoro', 'finance', 'time'].indexOf(systemCardId) * (124 + 16),
                 opacity: 1,
               }}
               initial={false}
@@ -912,21 +934,17 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                   </div>
                 </div>
               )}
+
+              {displayedCardId === 'time' && <TimeCardBody clock={timeCard} />}
               </div>
           </div>
         </div>
 
       </main>
 
-      {/* 3. RETRO CLOCK */}
-      <footer className="w-full max-w-[1400px] mx-auto mt-4 flex flex-col items-center text-center">
-        {/* BOTTOM METADATA & CLOCK */}
-        <div className="flex flex-col items-center gap-0.5">
-          <span className="font-mono-main text-[10px] sm:text-[11px] font-bold opacity-30 tracking-[0.3em] uppercase leading-none mb-1">{dateStringEn}</span>
-          <p className="font-mono-main text-3xl sm:text-4xl text-ink font-black tracking-widest leading-none">
-            {timeOnly} <span className="text-[11px] font-sans opacity-70 ml-1 font-bold">{amPm}</span>
-          </p>
-        </div>
+      {/* 3. FOOTER — today's date, in the middle */}
+      <footer className="w-full max-w-[1400px] mx-auto mt-6 flex justify-center">
+        <PixelDateTile date={getDateParts(now)} width="clamp(56px, 5.5vw, 76px)" />
       </footer>
 
       <AppModal

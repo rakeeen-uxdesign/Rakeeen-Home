@@ -163,6 +163,28 @@ export const FinanceVector: React.FC<{ size?: number }> = ({ size = 20 }) => {
 };
 
 
+// TIME — dotted clock face; 12 hour dots + two dotted hands + center dot.
+// Animation: the hour dots fade in sequence, like a second hand sweeping round.
+export const TimeVector: React.FC<{ size?: number }> = ({ size = 20 }) => {
+  const ring: [number, number][] = [
+    [12, 3], [16.5, 4.2], [19.8, 7.5], [21, 12], [19.8, 16.5], [16.5, 19.8],
+    [12, 21], [7.5, 19.8], [4.2, 16.5], [3, 12], [4.2, 7.5], [7.5, 4.2],
+  ];
+  const hands: [number, number][] = [[12, 12], [12, 9.5], [12, 7], [14.5, 12], [16.5, 12]];
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      {ring.map(([cx, cy], i) => (
+        <circle key={`r${i}`} cx={cx} cy={cy} r="1.1"
+          style={{ animation: 'vectorFade 2.4s ease-in-out infinite', animationDelay: `${i * 0.1}s` }} />
+      ))}
+      {hands.map(([cx, cy], i) => (
+        <circle key={`h${i}`} cx={cx} cy={cy} r="0.9" />
+      ))}
+    </svg>
+  );
+};
+
+
 // ─── Monthly Fingerprint ────────────────────────────────────────────────────
 export const MonthFingerprint: React.FC<{
   monthKey: string;

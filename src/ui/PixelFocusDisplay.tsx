@@ -6,8 +6,8 @@ import { DM } from '@/ui/TimerComponents';
  * wavy ring (see FocusCarousel). Same DM digit bitmaps as DMTimer, just drawn
  * as square pixels instead of dots, to match this style's chunkier look.
  */
-export const PixelDigits: React.FC<{ mm: string; ss: string; color: string; maxWidth?: string }> = ({
-  mm, ss, color, maxWidth = 'min(88vw, 480px)',
+export const PixelDigits: React.FC<{ mm: string; ss: string; color: string; maxWidth?: string; height?: string; flush?: boolean }> = ({
+  mm, ss, color, maxWidth = 'min(88vw, 480px)', height, flush = false,
 }) => {
   const cell = 15;
   const gap = 3;
@@ -16,7 +16,7 @@ export const PixelDigits: React.FC<{ mm: string; ss: string; color: string; maxW
   const digitH = 5 * step - gap;
   const colGap = step * 1.1;
 
-  const mmChars = mm.length === 3 ? [mm[0], mm[1], mm[2]] : [mm[0] ?? '0', mm[1] ?? '0'];
+  const mmChars = [...(mm || '0')];
   const xPositions: number[] = [];
   let curX = 0;
   mmChars.forEach(() => { xPositions.push(curX); curX += digitW + colGap; });
@@ -24,7 +24,9 @@ export const PixelDigits: React.FC<{ mm: string; ss: string; color: string; maxW
   const xSS = xColon + step * 1.6;
   const ssPositions = [xSS, xSS + digitW + colGap];
   const totalW = ssPositions[1] + digitW;
-  const pad = cell;
+  // The padding is breathing room for the big faces; `flush` drops it so the first
+  // pixel column sits exactly on the svg's left edge, for aligning against text.
+  const pad = flush ? 0 : cell;
 
   const renderDigit = (digit: string, tx: number) =>
     (DM[digit] ?? DM['0']).flatMap((row, ri) =>
@@ -40,7 +42,9 @@ export const PixelDigits: React.FC<{ mm: string; ss: string; color: string; maxW
   return (
     <svg
       viewBox={`${-pad} ${-pad} ${totalW + pad * 2} ${digitH + pad * 2}`}
-      style={{ width: maxWidth, height: 'auto' }}
+      // `height` pins the digit size regardless of how many digits there are (a 12-hour
+      // clock's hour is 1 or 2 digits) — otherwise a fixed width would rescale them.
+      style={height ? { height, width: 'auto' } : { width: maxWidth, height: 'auto' }}
       overflow="visible"
     >
       {mmChars.map((ch, i) => renderDigit(ch, xPositions[i]))}
@@ -62,6 +66,29 @@ const HOUR_MARKS = new Set(['1,6', '1,7', '12,6', '12,7', '6,1', '7,1', '6,12', 
 
 const distFromCenter = (r: number, c: number) => Math.hypot(c + 0.5 - C, r + 0.5 - C);
 
+// The pixel face is identical for every clock (Focus and the world clocks), so
+// it's built once here rather than on every render of every instance.
+const CLOCK_FACE = (() => {
+  const face = 'color-mix(in srgb, var(--ink) 16%, var(--paper))';
+  const rim = 'color-mix(in srgb, var(--ink) 38%, var(--paper))';
+  const mark = 'color-mix(in srgb, var(--ink) 55%, var(--paper))';
+  const cell = 10;
+  const gap = 1;
+  const step = cell + gap;
+  const size = N * step - gap;
+  const cells: React.ReactNode[] = [];
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const d = distFromCenter(r, c);
+      if (d > FACE_RADIUS) continue;
+      const key = `${r},${c}`;
+      const fill = d > RIM_FROM ? rim : HOUR_MARKS.has(key) ? mark : face;
+      cells.push(<rect key={key} x={c * step} y={r * step} width={cell} height={cell} fill={fill} />);
+    }
+  }
+  return { size, center: size / 2, step, cell, cells };
+})();
+
 /**
  * A pixel-art clock: a square-pixel face in a neutral tone, with one ordinary
  * smooth hand in the session's color (green for focus, teal for break, gold
@@ -82,10 +109,6 @@ export const PixelClock: React.FC<{
   width?: string;
 }> = ({ elapsedSeconds, mode, isOvertime, running, width = '120px' }) => {
   const handColor = isOvertime ? 'var(--pomo-overtime)' : mode === 'break' ? 'var(--pomo-break)' : 'var(--pomo-focus)';
-  const face = 'color-mix(in srgb, var(--ink) 16%, var(--paper))';
-  const rim = 'color-mix(in srgb, var(--ink) 38%, var(--paper))';
-  const mark = 'color-mix(in srgb, var(--ink) 55%, var(--paper))';
-
   const counterRef = React.useRef(Math.max(0, Math.floor(elapsedSeconds)));
   counterRef.current = Math.max(0, Math.floor(elapsedSeconds));
   const handRef = React.useRef<SVGGElement>(null);
@@ -122,22 +145,7 @@ export const PixelClock: React.FC<{
     return () => cancelAnimationFrame(frame);
   }, [running, running ? -1 : Math.floor(elapsedSeconds)]);
 
-  const cell = 10;
-  const gap = 1;
-  const step = cell + gap;
-  const size = N * step - gap;
-  const center = size / 2;
-
-  const cells: React.ReactNode[] = [];
-  for (let r = 0; r < N; r++) {
-    for (let c = 0; c < N; c++) {
-      const d = distFromCenter(r, c);
-      if (d > FACE_RADIUS) continue;
-      const key = `${r},${c}`;
-      const fill = d > RIM_FROM ? rim : HOUR_MARKS.has(key) ? mark : face;
-      cells.push(<rect key={key} x={c * step} y={r * step} width={cell} height={cell} fill={fill} />);
-    }
-  }
+  const { size, center, cells } = CLOCK_FACE;
 
   return (
     <svg viewBox={`0 0 ${size} ${size}`} style={{ width, height: 'auto' }}>
@@ -149,3 +157,166 @@ export const PixelClock: React.FC<{
     </svg>
   );
 };
+
+/**
+ * Pixel pictograms for the world clocks — one per country. They're drawn on a grid
+ * twice as fine as the face's own (half-cell pixels), so there's room for real
+ * detail: up to 12 wide × 8 tall, centred on the face's lower half under the hands.
+ */
+export const CLOCK_EMBLEMS = {
+  // Great Pyramid
+  egypt: [
+    '.....##.....',
+    '....####....',
+    '...######...',
+    '..########..',
+    '.##########.',
+    '############',
+  ],
+  // Big Ben — spire, clock face, tower
+  london: [
+    '..##..',
+    '..##..',
+    '.####.',
+    '.#..#.',
+    '.####.',
+    '.####.',
+    '.####.',
+    '.####.',
+  ],
+  // Burj Khalifa — needle and stepped tiers
+  dubai: [
+    '..#..',
+    '..#..',
+    '.###.',
+    '.###.',
+    '.###.',
+    '#####',
+    '#####',
+    '#####',
+  ],
+  // Date palm
+  saudi: [
+    '..##...##..',
+    '.#.#####.#.',
+    '#...###...#',
+    '.....#.....',
+    '.....#.....',
+    '.....#.....',
+    '.....#.....',
+    '....###....',
+  ],
+  // Khanjar — hilt, guard, curved sheath
+  oman: [
+    '.#####.',
+    '...#...',
+    '..###..',
+    '#######',
+    '.#####.',
+    '..####.',
+    '...###.',
+    '....##.',
+  ],
+  // Southern Cross
+  australia: [
+    '.....#.....',
+    '....###....',
+    '.#...#...#.',
+    '###.....###',
+    '.#.......#.',
+    '.....#..#..',
+    '....###....',
+    '.....#.....',
+  ],
+} as const;
+
+// One muted dark tone for every emblem — a step above the face, so the hands stay the focus.
+const EMBLEM_COLOR = 'color-mix(in srgb, var(--ink) 30%, var(--paper))';
+
+const ClockEmblem = React.memo<{ rows: readonly string[] }>(({ rows }) => {
+  const { size, step, cell } = CLOCK_FACE;
+  const emblemStep = step / 2;
+  const width = Math.max(...rows.map((r) => r.length));
+  const x0 = (size - width * emblemStep) / 2;
+  // The bottom row ends a few pixels above the 6 o'clock mark (row N - 2 is the last row inside the rim).
+  const y0 = (N - 2) * step - 4 - rows.length * emblemStep;
+  return (
+    <g fill={EMBLEM_COLOR}>
+      {rows.flatMap((row, r) =>
+        [...row].map((ch, c) => (ch === '#'
+          ? <rect key={`${r},${c}`} x={x0 + c * emblemStep} y={y0 + r * emblemStep} width={cell / 2} height={cell / 2} />
+          : null)),
+      )}
+    </g>
+  );
+});
+ClockEmblem.displayName = 'ClockEmblem';
+
+/** UTC offset of `timeZone` at `at`, in ms — via Intl so DST is handled by the platform. */
+function zoneOffsetMs(timeZone: string, at: number): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: 'numeric', second: 'numeric',
+  }).formatToParts(new Date(at));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  return asUtc - Math.floor(at / 1000) * 1000;
+}
+
+/**
+ * The same pixel clock as the Focus face, showing the real time in a time
+ * zone, with hour, minute and second hands. All three are drawn every frame
+ * from the wall clock, so the second hand sweeps rather than ticks and the
+ * minute and hour hands creep the way a real clock's do. The zone's UTC
+ * offset is re-read every half minute so a DST change is picked up live.
+ */
+export const PixelWallClock = React.memo<{
+  timeZone: string;
+  width?: string;
+  /** A pixel emblem (see CLOCK_EMBLEMS) drawn on the face's lower half, under the hands. */
+  emblem?: readonly string[];
+}>(({ timeZone, width = '110px', emblem }) => {
+  const accent = 'var(--pomo-focus)';
+  const { size, center, cells } = CLOCK_FACE;
+  const hourRef = React.useRef<SVGGElement>(null);
+  const minuteRef = React.useRef<SVGGElement>(null);
+  const secondRef = React.useRef<SVGGElement>(null);
+
+  React.useEffect(() => {
+    let frame = 0;
+    let offset = zoneOffsetMs(timeZone, Date.now());
+    let offsetAt = Date.now();
+    const tick = () => {
+      const now = Date.now();
+      if (now - offsetAt > 30_000) { offset = zoneOffsetMs(timeZone, now); offsetAt = now; }
+      const t = now + offset;
+      const rotate = (el: SVGGElement | null, turns: number) =>
+        el?.style.setProperty('transform', `rotate(${turns * 360}deg)`);
+      rotate(secondRef.current, (t % 60_000) / 60_000);
+      rotate(minuteRef.current, (t % 3_600_000) / 3_600_000);
+      rotate(hourRef.current, (t % 43_200_000) / 43_200_000);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [timeZone]);
+
+  const origin = { transformOrigin: `${center}px ${center}px` };
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width, height: 'auto' }}>
+      {cells}
+      {emblem && <ClockEmblem rows={emblem} />}
+      <g ref={hourRef} style={origin}>
+        <line x1={center} y1={center + 6} x2={center} y2={center - 34} stroke="var(--ink)" strokeWidth={6} strokeLinecap="round" />
+      </g>
+      <g ref={minuteRef} style={origin}>
+        <line x1={center} y1={center + 8} x2={center} y2={center - 54} stroke="var(--ink)" strokeWidth={4.5} strokeLinecap="round" />
+      </g>
+      <g ref={secondRef} style={origin}>
+        <line x1={center} y1={center + 14} x2={center} y2={center - 60} stroke={accent} strokeWidth={2.5} strokeLinecap="round" />
+      </g>
+      <circle cx={center} cy={center} r={6} fill={accent} />
+    </svg>
+  );
+});
+PixelWallClock.displayName = 'PixelWallClock';

@@ -65,3 +65,51 @@ export function isSleepWindow(times: PrayerTimes | undefined, now: Date = new Da
 
   return now >= isha || now < fajr;
 }
+
+export type DayPhase =
+  | 'deepNight' | 'fajrHour' | 'morning' | 'hunting' | 'midday'
+  | 'push' | 'birdsHome' | 'goldenHour' | 'ishaNear' | 'night';
+
+const MIN = 60_000;
+
+/** Typical times, used for any prayer the API map doesn't have (yet). */
+const FALLBACK_TIMES = { Fajr: '04:00', Sunrise: '05:30', Dhuhr: '12:00', Asr: '15:30', Maghrib: '18:00', Isha: '19:30' } as const;
+
+/** Today's prayer moments as epoch ms, so callers can compare and add minutes directly. */
+export interface DayMoments { fajr: number; sunrise: number; dhuhr: number; asr: number; maghrib: number; isha: number }
+
+export function getDayMoments(times: PrayerTimes | undefined, now: Date = new Date()): DayMoments {
+  const at = (key: keyof typeof FALLBACK_TIMES) => {
+    const [h, m] = (times?.[key] || FALLBACK_TIMES[key]).split(':').map(Number);
+    return new Date(now).setHours(h, m, 0, 0);
+  };
+  return {
+    fajr: at('Fajr'), sunrise: at('Sunrise'), dhuhr: at('Dhuhr'),
+    asr: at('Asr'), maghrib: at('Maghrib'), isha: at('Isha'),
+  };
+}
+
+/**
+ * Where "now" sits in the day, measured against the real prayer times rather than
+ * fixed clock hours — so the header line shifts with the seasons. Falls back to
+ * typical times for any prayer the map doesn't have yet.
+ *
+ *   before Fajr → deepNight · Fajr→Sunrise → fajrHour · Sunrise→mid-morning → morning
+ *   → Dhuhr → hunting · Dhuhr→+90m → midday · →Asr → push · →Maghrib → birdsHome
+ *   Maghrib→Isha−30m → goldenHour · Isha−30m→Isha → ishaNear · after Isha → night
+ */
+export function getDayPhase(times: PrayerTimes | undefined, now: Date = new Date()): DayPhase {
+  const { fajr, sunrise, dhuhr, asr, maghrib, isha } = getDayMoments(times, now);
+  const t = now.getTime();
+
+  if (t < fajr) return 'deepNight';
+  if (t < sunrise) return 'fajrHour';
+  if (t < sunrise + (dhuhr - sunrise) / 2) return 'morning';
+  if (t < dhuhr) return 'hunting';
+  if (t < dhuhr + 90 * MIN) return 'midday';
+  if (t < asr) return 'push';
+  if (t < maghrib) return 'birdsHome';
+  if (t < isha - 30 * MIN) return 'goldenHour';
+  if (t < isha) return 'ishaNear';
+  return 'night';
+}

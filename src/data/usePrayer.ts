@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { computeNextPrayer, type NextPrayer } from '@/domain/devotion/prayer';
+import type { HijriDate } from '@/domain/devotion/occasion';
 
 export const usePrayer = () => {
   const [times, setTimes] = useState<Record<string, string>>(() => {
@@ -12,6 +13,14 @@ export const usePrayer = () => {
   });
   const [hijri, setHijri] = useState<string>(() => {
     return localStorage.getItem('prayer_hijri') || '';
+  });
+  const [hijriDate, setHijriDate] = useState<HijriDate | null>(() => {
+    try {
+      const saved = localStorage.getItem('prayer_hijri_parts');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
   const [loading, setLoading] = useState(true);
   const [nextPrayer, setNextPrayer] = useState<NextPrayer | null>(null);
@@ -30,6 +39,11 @@ export const usePrayer = () => {
         setHijri(hStr);
         localStorage.setItem('prayer_times', JSON.stringify(data.data.timings));
         localStorage.setItem('prayer_hijri', hStr);
+        const parts = { day: Number(h.day), month: Number(h.month.number) };
+        if (Number.isFinite(parts.day) && Number.isFinite(parts.month)) {
+          setHijriDate(parts);
+          localStorage.setItem('prayer_hijri_parts', JSON.stringify(parts));
+        }
       }
     } catch (error) {
       console.error('Failed to fetch prayer times', error);
@@ -53,5 +67,5 @@ export const usePrayer = () => {
     return () => clearInterval(timer);
   }, [updateNextPrayer]);
 
-  return { times, nextPrayer, loading, hijri };
+  return { times, nextPrayer, loading, hijri, hijriDate };
 };

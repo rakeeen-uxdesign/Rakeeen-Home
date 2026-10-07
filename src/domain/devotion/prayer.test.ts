@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeNextPrayer, isSleepWindow } from '@/domain/devotion/prayer';
+import { computeNextPrayer, isSleepWindow, getDayPhase, getDayMoments } from '@/domain/devotion/prayer';
 
 const times = { Fajr: '04:24', Dhuhr: '12:03', Asr: '15:36', Maghrib: '18:30', Isha: '19:52' };
 
@@ -41,5 +41,48 @@ describe('isSleepWindow — Isha … Fajr', () => {
   it('falls back to 21:00 / 04:00 with no times', () => {
     expect(isSleepWindow(undefined, new Date('2026-09-10T22:00:00'))).toBe(true);
     expect(isSleepWindow(undefined, new Date('2026-09-10T10:00:00'))).toBe(false);
+  });
+});
+
+describe('getDayPhase', () => {
+  const t = { Fajr: '04:24', Sunrise: '05:55', Dhuhr: '12:03', Asr: '15:36', Maghrib: '18:30', Isha: '19:52' };
+  const at = (hhmm: string) => new Date(`2026-09-10T${hhmm}:00`);
+
+  it('walks through the day by real prayer times', () => {
+    expect(getDayPhase(t, at('03:00'))).toBe('deepNight');
+    expect(getDayPhase(t, at('05:00'))).toBe('fajrHour');
+    expect(getDayPhase(t, at('07:00'))).toBe('morning');
+    expect(getDayPhase(t, at('11:00'))).toBe('hunting');
+    expect(getDayPhase(t, at('12:30'))).toBe('midday');
+    expect(getDayPhase(t, at('14:00'))).toBe('push');
+    expect(getDayPhase(t, at('17:00'))).toBe('birdsHome');
+    expect(getDayPhase(t, at('19:00'))).toBe('goldenHour');
+    expect(getDayPhase(t, at('19:30'))).toBe('ishaNear');
+    expect(getDayPhase(t, at('21:00'))).toBe('night');
+  });
+
+  it('moves with the season — same clock time, different phase', () => {
+    const winter = { Fajr: '05:15', Sunrise: '06:45', Dhuhr: '11:55', Asr: '14:40', Maghrib: '17:10', Isha: '18:35' };
+    expect(getDayPhase(winter, at('17:30'))).toBe('goldenHour');
+    expect(getDayPhase(t, at('17:30'))).toBe('birdsHome');
+  });
+
+  it('falls back to typical times when none are loaded', () => {
+    expect(getDayPhase({}, at('03:00'))).toBe('deepNight');
+    expect(getDayPhase(undefined, at('13:00'))).toBe('midday');
+  });
+});
+
+describe('getDayMoments', () => {
+  it('turns the API strings into today\'s epoch ms', () => {
+    const m = getDayMoments({ Fajr: '04:24', Dhuhr: '12:03' }, new Date('2026-09-10T09:00:00'));
+    expect(new Date(m.fajr).getHours()).toBe(4);
+    expect(new Date(m.fajr).getMinutes()).toBe(24);
+    expect(new Date(m.dhuhr).getHours()).toBe(12);
+  });
+  it('fills any missing prayer with a typical time', () => {
+    const m = getDayMoments({}, new Date('2026-09-10T09:00:00'));
+    expect(new Date(m.isha).getHours()).toBe(19);
+    expect(new Date(m.isha).getMinutes()).toBe(30);
   });
 });
