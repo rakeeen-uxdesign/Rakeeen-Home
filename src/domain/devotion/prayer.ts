@@ -66,6 +66,18 @@ export function isSleepWindow(times: PrayerTimes | undefined, now: Date = new Da
   return now >= isha || now < fajr;
 }
 
+/** Water is closed from Maghrib (when the day is archived) until Fajr. */
+export function isWaterClosed(times: PrayerTimes | undefined, now: Date = new Date()): boolean {
+  const { fajr, maghrib } = getDayMoments(times, now);
+  return now.getTime() >= maghrib || now.getTime() < fajr;
+}
+
+/** New focus sessions can't start from Isha until Fajr. */
+export function isFocusNightLocked(times: PrayerTimes | undefined, now: Date = new Date()): boolean {
+  const { fajr, isha } = getDayMoments(times, now);
+  return now.getTime() >= isha || now.getTime() < fajr;
+}
+
 export type DayPhase =
   | 'deepNight' | 'fajrHour' | 'morning' | 'hunting' | 'midday'
   | 'push' | 'birdsHome' | 'goldenHour' | 'ishaNear' | 'night';
@@ -73,7 +85,7 @@ export type DayPhase =
 const MIN = 60_000;
 
 /** Typical times, used for any prayer the API map doesn't have (yet). */
-const FALLBACK_TIMES = { Fajr: '04:00', Sunrise: '05:30', Dhuhr: '12:00', Asr: '15:30', Maghrib: '18:00', Isha: '19:30' } as const;
+const FALLBACK_TIMES = { Fajr: '04:00', Sunrise: '05:30', Dhuhr: '12:00', Asr: '15:30', Maghrib: '18:00', Isha: '19:00' } as const;
 
 /** Today's prayer moments as epoch ms, so callers can compare and add minutes directly. */
 export interface DayMoments { fajr: number; sunrise: number; dhuhr: number; asr: number; maghrib: number; isha: number }

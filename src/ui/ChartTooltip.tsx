@@ -2,7 +2,7 @@ import React from 'react';
 
 interface ChartTooltipProps {
   active?: boolean;
-  payload?: any[];
+  payload?: Array<{ value: number }>;
   label?: string;
   unit: string;
   getTipMessage: (value: number) => string;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getLogicalDate, getTodayIdx, getPomoTodayIdx, getPomoLogicalDate, isFriday } from '@/domain/day';
+import { getLogicalDate, getPomoTodayIdx, getPomoLogicalDate, isFriday } from '@/domain/day';
 
 // A Wednesday: 2026-09-09
 const wedMorning = new Date('2026-09-09T09:00:00');
@@ -16,18 +16,6 @@ describe('getLogicalDate', () => {
   });
   it('04:00 sharp is the new day', () => {
     expect(getLogicalDate(wedFourAM).toDateString()).toBe('Thu Sep 10 2026');
-  });
-});
-
-describe('getTodayIdx (Mon=0 … Sun=6)', () => {
-  it('Wednesday morning → 2', () => {
-    expect(getTodayIdx(wedMorning)).toBe(2);
-  });
-  it('2:30am Thursday is still logically Wednesday → 2', () => {
-    expect(getTodayIdx(wedLateNight)).toBe(2);
-  });
-  it('Sunday → 6', () => {
-    expect(getTodayIdx(sunday)).toBe(6);
   });
 });
 

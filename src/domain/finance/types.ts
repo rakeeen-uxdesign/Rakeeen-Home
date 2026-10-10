@@ -15,16 +15,6 @@ export interface FinanceBuckets {
   sadaqa: number;
 }
 
-export interface FinanceTransaction {
-  id: string;
-  type: 'deposit' | 'debit';
-  bank: string;
-  amount: number;
-  description: string;
-  category?: string;
-  timestamp: string;
-}
-
 export interface GoldAsset {
   id: string;
   quantity: number;
@@ -46,11 +36,13 @@ export interface Subscription {
 
 export interface FinanceLog {
   id: string;
-  type: 'deposit' | 'withdraw';
+  /** `assign` moves money between buckets only (the bank doesn't change); its amount is negative when taking out. */
+  type: 'deposit' | 'withdraw' | 'assign';
   amount: number;
+  /** Empty for `assign`. */
   bank: string;
   bucket?: string;
-  mode?: 'split' | 'manual';
+  mode?: 'split' | 'manual' | 'reconcile';
   category?: string;      // 'Salary' | 'Freelance' for split deposits
   timestamp: string;      // ISO
 }

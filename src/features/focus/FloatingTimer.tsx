@@ -4,7 +4,6 @@ import { usePomodoro } from '@/data/usePomodoro';
 import { useRingAnimation } from '@/ui/useRingAnimation';
 import { formatTime } from '@/lib/format';
 import { WavyRing } from '@/ui/TimerComponents';
-import { motion } from 'framer-motion';
 
 interface FloatingTimerProps {
   onNavigate: () => void;
@@ -25,7 +24,6 @@ export const FloatingTimer: React.FC<FloatingTimerProps> = ({ onNavigate }) => {
   // Derived values (safe to compute before early return)
   const isOnPomodoro = location.pathname.includes('pomodoro');
   const displayTime = isOvertime ? `+${formatTime(overtime)}` : formatTime(timeLeft);
-  const color = isOvertime ? 'text-rust' : (mode === 'focus' ? 'text-forest' : 'text-sepia');
   const waves = mode === 'focus' ? focusDuration : breakDuration;
 
   const isOnHome = location.pathname === '/' || location.pathname === '' || location.pathname.endsWith('Rakeeen-Home') || location.pathname.endsWith('Rakeeen-Home/');

@@ -23,6 +23,8 @@ export function getAbsenceLine(daysAway: number | null, todayEmpty: boolean): st
 const DAYTIME: DayPhase[] = ['morning', 'hunting', 'midday', 'push', 'birdsHome'];
 /** Phases in which a low glass count is worth a nudge (water closes at Maghrib). */
 const WATER_NUDGE_PHASES: DayPhase[] = ['hunting', 'midday', 'push', 'birdsHome'];
+/** The week's-trend lines are a morning framing, not something to repeat all day. */
+const TREND_PHASES: DayPhase[] = ['fajrHour', 'morning', 'hunting'];
 /** Early enough in the day that "still early" is true — before the afternoon push. */
 const EARLY_DAY: DayPhase[] = ['morning', 'hunting', 'midday', 'push'];
 
@@ -121,9 +123,9 @@ export interface GreetingInputs {
 
 /**
  * The header line, most notable condition first: a running focus session, a prayer or
- * occasion, the sleep tease, a return after absence, the week's trend, weather, real
- * numbers, then the nudges (low water, no focus), Friday, and finally the plain phrase
- * for this part of the day.
+ * occasion, the sleep tease, a return after absence, weather, real numbers, then the nudges
+ * (low water, no focus), Friday, the week's trend (mornings only, so it never buries
+ * the rest of the day), and finally the plain phrase for this part of the day.
  */
 export function pickGreetingLine(g: GreetingInputs): string {
   const waterLow = g.glasses < 3 && WATER_NUDGE_PHASES.includes(g.phase);
@@ -134,11 +136,11 @@ export function pickGreetingLine(g: GreetingInputs): string {
   if (g.occasion) return g.occasion;
   if (g.isSleepTime) return SLEEP_TEASE_LINES[Math.floor(g.now.getMinutes() / 15) % SLEEP_TEASE_LINES.length];
   if (g.absence) return g.absence;
-  if (WEEK_PATTERN_LINES[g.weekPattern]) return WEEK_PATTERN_LINES[g.weekPattern];
   if (g.weather) return g.weather;
   if (g.progress) return g.progress;
   if (waterLow) return 'RIVER IS LOW TODAY ... DRINK UP ';
   if (noFocus) return "HAWK HASN'T MOVED YET ... ";
   if (g.isFriday) return "JUMU'AH MUBARAK ... READ YOUR KAHF ";
+  if (TREND_PHASES.includes(g.phase) && WEEK_PATTERN_LINES[g.weekPattern]) return WEEK_PATTERN_LINES[g.weekPattern];
   return PHASE_LINES[g.phase];
 }

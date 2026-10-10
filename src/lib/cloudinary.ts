@@ -20,7 +20,7 @@ export const uploadImage = async (file: File): Promise<string> => {
     }
 
     return data.secure_url;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Detailed Cloudinary Error:', error);
     throw error;
   }

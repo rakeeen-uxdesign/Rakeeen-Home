@@ -61,7 +61,7 @@ const FingerprintVector: React.FC<{ scanning?: boolean }> = ({ scanning = false 
             strokeLinecap={ICON_STROKE_LINECAP}
             fill="none"
             style={{
-              ['--len' as any]: len,
+              ['--len' as string]: len,
               strokeDasharray: `${len} ${len}`,
               strokeDashoffset: scanning ? len : 0,
               opacity: scanning ? 0.15 : 0.5 - i * 0.06,
@@ -116,9 +116,9 @@ export const TouchIDGate: React.FC<Props> = ({ user, onCleared }) => {
     try {
       await registerTouchID(user.uid, user.email ?? user.uid);
       onCleared();
-    } catch (e: any) {
+    } catch (e) {
       setErrorMsg(
-        e?.name === 'NotAllowedError'
+        (e as { name?: string })?.name === 'NotAllowedError'
           ? 'Cancelled. Try again.'
           : 'Registration failed. Make sure Touch ID is enabled.'
       );

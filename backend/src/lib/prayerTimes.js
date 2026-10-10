@@ -13,7 +13,7 @@ async function fetchTodayTimings() {
   return data.data.timings;
 }
 
-export async function getTodayTimings() {
+async function getTodayTimings() {
   const dateKey = new Date().toDateString();
   if (cache.dateKey === dateKey && cache.timings) return cache.timings;
   try {

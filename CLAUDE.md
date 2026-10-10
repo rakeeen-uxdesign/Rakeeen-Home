@@ -15,11 +15,11 @@ short version; that one explains the layers and the reasoning.
 npm run dev         # local dev server (http://localhost:5173/Rakeeen-Home/)
 npm run build         # production build — esbuild-based; this is the real smoke test
 npm run test:run       # vitest, single run
-npm run lint            # eslint
+npm run typecheck       # tsc --noEmit — strict, no unused locals/params; must stay at 0 errors
 ```
 
-The repo has pre-existing eslint warnings/tsc errors that predate this guide —
-`npm run build` (not `tsc`) is the pass/fail signal for "did this break the app".
+`npm run build` (esbuild) catches resolution errors but not type errors, so run
+`typecheck` as well before calling something done. The project has no eslint setup.
 
 ## The five rules that matter most
 
@@ -105,5 +105,7 @@ weight (encodes a data value), and `CustomCursor`'s shape outline.
   `useFirebaseSync`.
 - Don't reach into another feature's folder (`features/water/` importing from
   `features/finance/`) — promote the shared thing to `domain/`, `ui/`, or `lib/`.
+- Don't hand-roll a boxed tab/segmented control or a day/month/year button group —
+  use `ui/Tabs` (navigation) or `ui/FilterSelect` (filtering a list or chart).
 - Don't commit with a dev-auth bypass still active, or with `.env.local` /
   secrets in the diff.

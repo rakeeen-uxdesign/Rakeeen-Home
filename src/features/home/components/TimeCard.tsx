@@ -35,7 +35,7 @@ const LabeledClock: React.FC<{ id: ClockId }> = ({ id }) => {
   return (
     <div className="w-full flex flex-col items-center gap-1.5">
       <PixelWallClock timeZone={timeZone} emblem={CLOCK_EMBLEMS[id]} width="100%" />
-      <span className="font-mono-main text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-ink/50 leading-none">{label}</span>
+      <span className="font-mono-main text-[8px] sm:text-[9px] font-bold uppercase tracking-wider leading-none">{label}</span>
     </div>
   );
 };
@@ -49,7 +49,7 @@ export const TimeCardBody: React.FC<{ clock: ClockParts }> = ({ clock }) => (
   <div className="flex-1 flex flex-col justify-between">
     <div className="flex justify-between items-start">
       <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mt-1">TIME</h2>
-      <div className="text-ink opacity-60">
+      <div className="opacity-60">
         <TimeVector size={36} />
       </div>
     </div>
@@ -61,7 +61,7 @@ export const TimeCardBody: React.FC<{ clock: ClockParts }> = ({ clock }) => (
         </div>
         <div className="flex items-end gap-2">
           <PixelDigits mm={clock.hour} ss={clock.minute} color="var(--pomo-focus)" height={HOME_DIGITS_HEIGHT} flush />
-          <span className="font-mono-main text-[10px] font-bold text-ink/50 leading-none pb-0.5">{clock.period}</span>
+          <span className="font-mono-main text-[10px] font-bold leading-none pb-0.5">{clock.period}</span>
         </div>
       </div>
 

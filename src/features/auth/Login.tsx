@@ -1,29 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '@/data/firebase';
+import { isDarkTheme, setTheme } from '@/lib/theme';
 import { IconLock, IconLogin, IconSun as Sun, IconMoon as Moon } from '@/ui/icons';
 
 export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isDark, setIsDark] = useState(() => document.body.classList.contains('dark-theme'));
-
-  useEffect(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved === 'dark') {
-      document.body.classList.add('dark-theme');
-      setIsDark(true);
-    } else {
-      document.body.classList.remove('dark-theme');
-      setIsDark(false);
-    }
-  }, []);
+  const [isDark, setIsDark] = useState(isDarkTheme);
 
   const toggleTheme = () => {
-    const next = !isDark;
-    document.body.classList.toggle('dark-theme', next);
-    localStorage.setItem('theme', next ? 'dark' : 'light');
-    setIsDark(next);
+    setTheme(!isDark);
+    setIsDark(!isDark);
   };
 
   const handleGoogleLogin = async () => {
@@ -40,9 +28,9 @@ export const Login: React.FC = () => {
         await auth.signOut();
         setError(`Unauthorized access: ${user.email} is not in the whitelist.`);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError('Login failed: ' + err.message);
+      setError('Login failed: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setLoading(false);
     }

@@ -59,6 +59,20 @@
   --lime-950: #222C07;
 }
 
+/* The runtime palette (:root / body.dark-theme below) exposed to Tailwind, so `text-ink/40`,
+   `bg-paper-dark`, `border-ink/10` … generate real CSS and follow dark mode. `inline` keeps
+   them as live var() references instead of copying the light-theme values. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-paper: var(--paper);
+  --color-paper-dark: var(--paper-dark);
+  --color-ink: var(--ink);
+  --color-ink-faded: var(--ink-faded);
+  --color-sepia: var(--sepia);
+  --color-rust: var(--rust);
+  --color-forest: var(--forest);
+}
+
 @layer base {
   :root {
     --bg: #E7E8E1;
@@ -210,7 +224,6 @@
 @layer utilities {
   .font-sans-main  { font-family: var(--font-sans), sans-serif; }
   .font-mono-main  { font-family: var(--font-mono), monospace; }
-  .font-arabic-main { font-family: var(--font-arabic), sans-serif; }
 
   /* Auto-apply Thmanyah to any Arabic text */
   :lang(ar), [dir="rtl"] {
@@ -297,64 +310,16 @@ body:not(.dark-theme) [class*="border-ink/"] {
 }
 
 html {
+  /* Always keep the (transparent, 4px) scrollbar track. `scrollbar-gutter: stable` is ignored
+     once ::-webkit-scrollbar is styled, so without this the page shifts 4px sideways every
+     time its height crosses the screen's and the scrollbar appears or goes away. */
   scrollbar-gutter: stable;
-  overflow-y: auto;
-}
-
-/* Brutalist Custom Range Slider */
-.brutalist-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--ink);
-  opacity: 0.15;
-  height: 4px;
-  outline: none;
-  transition: opacity 0.2s ease;
-}
-.brutalist-slider:hover {
-  opacity: 0.3;
-}
-.brutalist-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  background: var(--ink);
-  border: 1px solid var(--paper);
-  border-radius: 0px;
-  cursor: none !important;
-}
-.brutalist-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  background: var(--ink);
-  border: 1px solid var(--paper);
-  border-radius: 0px;
-  cursor: none !important;
-}
-
-@keyframes pulseWave {
-  0% {
-    height: 20%;
-  }
-  100% {
-    height: 100%;
-  }
-}
-
-@keyframes journalOpen {
-  from { opacity: 0; transform: translateY(-10px); }
-  to   { opacity: 1; transform: translateY(0); }
+  overflow-y: scroll;
 }
 
 @keyframes vectorFade {
   0%, 100% { opacity: 0.18; }
   50% { opacity: 1; }
-}
-
-@keyframes waveScroll {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-500px); }
 }
 
 @keyframes dotPulse {
@@ -388,4 +353,3 @@ body.dark-theme [class*="border-ink"] {
 *, *::before, *::after {
   cursor: none !important;
 }
-

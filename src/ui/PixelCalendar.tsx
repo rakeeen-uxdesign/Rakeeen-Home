@@ -1,16 +1,17 @@
 import React from 'react';
 import { DM } from '@/ui/TimerComponents';
+import { BASE_TILE_COLUMNS, layoutDayTile } from '@/ui/dayTileLayout';
 
-// Same cells and tones as the pixel clocks' face, as a square: a rim ring around
-// an 11×11 inside, with the 5-row day number in the exact middle.
-const SIDE = 13;
+// Same cells and tones as the pixel clocks' face: a rim ring around an inside, with the
+// 5-row day number in the exact middle. The tile is 13 rows tall; its width adapts to the
+// number (see layoutDayTile) so the lit digits are always centred on whole columns.
+const ROWS = 13;
 const FACE = 'color-mix(in srgb, var(--ink) 16%, var(--paper))';
 const RIM = 'color-mix(in srgb, var(--ink) 38%, var(--paper))';
 const CELL = 10;
 const GAP = 1;
 const STEP = CELL + GAP;
-const EXTENT = SIDE * STEP - GAP;
-const DAY_ROW = Math.floor((SIDE - 5) / 2);
+const DAY_ROW = Math.floor((ROWS - 5) / 2);
 
 /**
  * Today's date: a pixel tile with the day number in the middle, in the Focus
@@ -19,25 +20,31 @@ const DAY_ROW = Math.floor((SIDE - 5) / 2);
  */
 export const PixelDateTile: React.FC<{ date: { day: number; monthName: string }; width?: string }> = ({ date, width = '84px' }) => {
   const digits = [...String(date.day)];
-  // Each digit is 4 columns wide, with 1 column between digits.
-  const digitsWidth = digits.length * 5 - 1;
-  const dayCol = (SIDE - digitsWidth) / 2;
+  // Centre what's actually lit, not the 4-column glyph boxes: "1" only lights three columns,
+  // so boxes would leave "10" visibly off-centre.
+  const glyphs = digits.map((d) => {
+    const rows = DM[d] ?? DM['0'];
+    const lit = rows.flatMap((row) => row.flatMap((on, c) => (on ? [c] : [])));
+    const first = Math.min(...lit);
+    return { rows, first, width: Math.max(...lit) - first + 1 };
+  });
+  const { columns, starts } = layoutDayTile(glyphs.map((g) => g.width));
 
   const cells: React.ReactNode[] = [];
-  for (let r = 0; r < SIDE; r++) {
-    for (let c = 0; c < SIDE; c++) {
-      const isRim = r === 0 || c === 0 || r === SIDE - 1 || c === SIDE - 1;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < columns; c++) {
+      const isRim = r === 0 || c === 0 || r === ROWS - 1 || c === columns - 1;
       cells.push(<rect key={`${r},${c}`} x={c * STEP} y={r * STEP} width={CELL} height={CELL} fill={isRim ? RIM : FACE} />);
     }
   }
-  digits.forEach((d, i) => {
-    (DM[d] ?? DM['0']).forEach((row, r) =>
+  glyphs.forEach(({ rows, first }, i) => {
+    rows.forEach((row, r) =>
       row.forEach((on, c) => {
         if (!on) return;
         cells.push(
           <rect
             key={`d${i}-${r}-${c}`}
-            x={(dayCol + i * 5 + c) * STEP} y={(DAY_ROW + r) * STEP}
+            x={(starts[i] + c - first) * STEP} y={(DAY_ROW + r) * STEP}
             width={CELL} height={CELL} fill="var(--pomo-focus)"
           />
         );
@@ -45,10 +52,17 @@ export const PixelDateTile: React.FC<{ date: { day: number; monthName: string };
     );
   });
 
+  // The tile keeps the same pixel size whatever its width: a wider tile just grows past
+  // `width` (centred), and the month name stays centred under it.
   return (
     <div className="flex flex-col items-center gap-1.5" style={{ width }}>
-      <svg viewBox={`0 0 ${EXTENT} ${EXTENT}`} style={{ width: '100%', height: 'auto' }}>{cells}</svg>
-      <span className="font-mono-main text-[10px] font-normal text-ink/60 leading-none">{date.monthName}</span>
+      <svg
+        viewBox={`0 0 ${columns * STEP - GAP} ${ROWS * STEP - GAP}`}
+        style={{ width: `${(columns / BASE_TILE_COLUMNS) * 100}%`, height: 'auto', flexShrink: 0 }}
+      >
+        {cells}
+      </svg>
+      <span className="font-mono-main text-[10px] font-normal leading-none">{date.monthName}</span>
     </div>
   );
 };

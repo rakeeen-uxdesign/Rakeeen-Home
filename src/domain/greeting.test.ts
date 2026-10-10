@@ -85,8 +85,7 @@ describe('pickGreetingLine', () => {
   it('follows the documented priority order', () => {
     expect(pick({ occasion: 'OCC ', isSleepTime: true })).toBe('OCC ');
     expect(pick({ isSleepTime: true, absence: 'ABS ' })).toMatch(/ISHA|OWLS|FAJR|SLEEP/);
-    expect(pick({ absence: 'ABS ', weekPattern: 'slump' })).toBe('ABS ');
-    expect(pick({ weekPattern: 'slump', weather: 'WX ' })).toBe('THE RIVER HAS BEEN LOW ALL WEEK ... ');
+    expect(pick({ absence: 'ABS ', weather: 'WX ' })).toBe('ABS ');
     expect(pick({ weather: 'WX ', progress: 'PROG ' })).toBe('WX ');
     expect(pick({ progress: 'PROG ', glasses: 1 })).toBe('PROG ');
   });
@@ -96,6 +95,18 @@ describe('pickGreetingLine', () => {
     expect(pick({ glasses: 1, phase: 'morning', focusMinutes: 30 })).toBe('MORNING LOCKED IN ... BUILD IT ');
     expect(pick({ focusMinutes: 0 })).toBe("HAWK HASN'T MOVED YET ... ");
     expect(pick({ focusMinutes: 0, focusRunning: true })).toBe("PUSH WHILE THE SUN'S STILL UP ... ");
+  });
+
+  it('the week\'s trend only frames the morning and never buries the rest of the day', () => {
+    expect(pick({ phase: 'morning', weekPattern: 'rising' })).toBe("SOMETHING IS SHIFTING ... DON'T STOP NOW ");
+    expect(pick({ phase: 'hunting', weekPattern: 'fading' })).toBe('HAWK HAS BEEN DRIFTING ... COME BACK ');
+    expect(pick({ phase: 'push', weekPattern: 'rising' })).toBe("PUSH WHILE THE SUN'S STILL UP ... ");
+    expect(pick({ phase: 'night', weekPattern: 'slump' })).toBe('NIGHT SETTLED ... REST WELL ');
+  });
+
+  it('the trend yields to anything more specific', () => {
+    expect(pick({ phase: 'morning', weekPattern: 'rising', progress: 'PROG ' })).toBe('PROG ');
+    expect(pick({ phase: 'morning', weekPattern: 'rising', isFriday: true })).toBe("JUMU'AH MUBARAK ... READ YOUR KAHF ");
   });
 
   it('Friday outranks the plain phrase', () => {

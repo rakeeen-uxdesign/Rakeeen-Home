@@ -17,10 +17,3 @@ export function formatDurationText(totalMinutes: number): string {
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
 }
-
-/** "HH:MM" + minutes → "HH:MM" (24h, wraps are the caller's problem). */
-export function addMinutes(timeStr: string, mins: number): string {
-  const [h, m] = timeStr.split(':').map(Number);
-  const total = h * 60 + m + mins;
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}

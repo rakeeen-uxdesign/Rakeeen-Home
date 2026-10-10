@@ -3,13 +3,15 @@ import { useFirebaseSync } from '@/data/useFirebaseSync';
 import { usePrayer } from '@/data/usePrayer';
 import { useFridayGate } from '@/data/useFridayGate';
 import { niceTicks } from '@/lib/charts';
-import { ChartTooltip } from '@/ui/UIComponents';
+import { ChartTooltip } from '@/ui/ChartTooltip';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Cell } from 'recharts';
 import {
   IconRotateCcw as RotateCcw, IconUndo2 as Undo2, IconPlus as Plus,
   IconArrowLeft as ArrowLeft, IconChevronRight as ChevronRight,
 } from '@/ui/icons';
-import { motion } from 'framer-motion';
+import { FilterSelect, PERIOD_OPTIONS } from '@/ui/FilterSelect';
+import { isWaterClosed } from '@/domain/devotion/prayer';
+import { buildPeriodReports, periodMultiplier, type ReportView } from '@/domain/report';
 import { DotMatrixText } from '@/ui/DotMatrixText';
 
 
@@ -20,7 +22,7 @@ interface WaterProps {
 export const Water: React.FC<WaterProps> = ({ navigate }) => {
   const [glasses, setGlasses] = useFirebaseSync<number>('hydration_glasses', 0);
   const [history] = useFirebaseSync<Record<string, number>>('hydration_history', {});
-  const [reportView, setReportView] = useState<'week' | 'month' | 'year'>('week');
+  const [reportView, setReportView] = useState<ReportView>('week');
   const goal = 12;
 
   React.useEffect(() => {
@@ -36,13 +38,7 @@ export const Water: React.FC<WaterProps> = ({ navigate }) => {
     const timer = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(timer);
   }, []);
-  const [fajrH, fajrM] = (times?.Fajr || '04:00').split(':').map(Number);
-  const todayFajr = new Date(now);
-  todayFajr.setHours(fajrH, fajrM, 0, 0);
-  const [maghribH, maghribM] = (times?.Maghrib || '18:00').split(':').map(Number);
-  const todayMaghrib = new Date(now);
-  todayMaghrib.setHours(maghribH, maghribM, 0, 0);
-  const isLocked = now >= todayMaghrib || now < todayFajr;
+  const isLocked = isWaterClosed(times, now);
   const { friday, includedToday, includeToday } = useFridayGate(now);
   const fridayLocked = friday && !includedToday;
 
@@ -63,66 +59,12 @@ export const Water: React.FC<WaterProps> = ({ navigate }) => {
   };
 
   // --- ANALYTICS ---
-  const getDynamicReports = () => {
-    const now = new Date();
-    const todayStr = now.toDateString();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-
-    // Once the 6pm reset archives today's tally into history and zeroes the live counter,
-    // "today" needs the higher of the two — otherwise the chart shows 0 for the rest of
-    // the night even though the day's data is safely archived.
-    const todayEffective = Math.max(history[todayStr] || 0, glasses);
-
-    const getStartOfWeek = (d: Date): Date => {
-      const date = new Date(d);
-      const day = date.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
-      const diff = (day + 1) % 7;
-      date.setDate(date.getDate() - diff);
-      date.setHours(0, 0, 0, 0);
-      return date;
-    };
-
-    const startOfWeek = getStartOfWeek(now);
-    const weekDays = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-    const weekData = weekDays.map((name, i) => {
-      const date = new Date(startOfWeek);
-      date.setDate(startOfWeek.getDate() + i);
-      const dateStr = date.toDateString();
-      const isFuture = date > now && dateStr !== todayStr;
-      if (isFuture) return { name, glasses: 0 };
-      if (dateStr === todayStr) return { name, glasses: todayEffective };
-      return { name, glasses: history[dateStr] || 0 };
-    });
-
-    const monthData = [
-      { name: 'Week 1', glasses: 0 }, { name: 'Week 2', glasses: 0 },
-      { name: 'Week 3', glasses: 0 }, { name: 'Week 4', glasses: 0 }
-    ];
-    Object.entries(history).forEach(([dateStr, val]) => {
-      const d = new Date(dateStr);
-      if (d.getMonth() === currentMonth && d.getFullYear() === currentYear && dateStr !== todayStr) {
-        const weekIdx = Math.min(Math.floor((d.getDate() - 1) / 7), 3);
-        monthData[weekIdx].glasses += val;
-      }
-    });
-    const todayWeekIdx = Math.min(Math.floor((now.getDate() - 1) / 7), 3);
-    monthData[todayWeekIdx].glasses += todayEffective;
-
-    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const yearData = monthNames.map(name => ({ name, glasses: 0 }));
-    Object.entries(history).forEach(([dateStr, val]) => {
-      const d = new Date(dateStr);
-      if (d.getFullYear() === currentYear && dateStr !== todayStr) {
-        yearData[d.getMonth()].glasses += val;
-      }
-    });
-    yearData[currentMonth].glasses += todayEffective;
-
-    return { week: weekData, month: monthData, year: yearData };
-  };
-
-  const dynamicReports = getDynamicReports();
+  // Once the 6pm reset archives today's tally into history and zeroes the live counter,
+  // "today" needs the higher of the two — otherwise the chart shows 0 for the rest of
+  // the night even though the day's data is safely archived.
+  const todayGlasses = Math.max(history[new Date().toDateString()] || 0, glasses);
+  const reports = buildPeriodReports(history, todayGlasses);
+  const target = goal * periodMultiplier(reportView);
 
   return (
     <div className="min-h-screen bg-bg text-ink py-6 md:py-12 px-6 md:px-12 lg:px-20 font-sans-main flex flex-col transition-colors duration-300">
@@ -215,34 +157,12 @@ export const Water: React.FC<WaterProps> = ({ navigate }) => {
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
             <h2 className="font-sans-main text-2xl font-black uppercase tracking-tight">Analytics</h2>
 
-            {/* Brutalist Sliding Tab Switcher */}
-            <div className="flex border border-ink/20 overflow-hidden self-start relative bg-[var(--paper-dark)]">
-              {(['week', 'month', 'year'] as const).map((view) => (
-                <button
-                  key={view}
-                  onClick={() => setReportView(view)}
-                  className="relative font-mono-main text-[10px] uppercase tracking-widest font-bold px-4 py-2 cursor-pointer transition-colors duration-200"
-                  style={{
-                    color: reportView === view ? 'var(--paper)' : 'var(--ink)',
-                  }}
-                >
-                  {reportView === view && (
-                    <motion.div
-                      layoutId="waterTabBg"
-                      className="absolute inset-0 bg-[var(--ink)]"
-                      transition={{ type: 'spring', stiffness: 450, damping: 36 }}
-                      style={{ zIndex: 0 }}
-                    />
-                  )}
-                  <span className="relative z-10">{view}</span>
-                </button>
-              ))}
-            </div>
+            <FilterSelect label="Period" value={reportView} onChange={setReportView} options={PERIOD_OPTIONS} />
           </div>
 
           <div className="h-[280px] w-full">
             <ResponsiveContainer>
-              <BarChart data={dynamicReports[reportView]} margin={{ top: 16, right: 8, left: -10, bottom: 0 }}>
+              <BarChart data={reports[reportView]} margin={{ top: 16, right: 8, left: -10, bottom: 0 }}>
                 <CartesianGrid vertical={false} stroke="var(--ink)" strokeOpacity={0.05} strokeDasharray="0" />
                 <XAxis
                   dataKey="name"
@@ -256,12 +176,8 @@ export const Water: React.FC<WaterProps> = ({ navigate }) => {
                   axisLine={false}
                   tickLine={false}
                   width={32}
-                  domain={[0, (dataMax: number) => {
-                    const target = reportView === 'week' ? 12 : reportView === 'month' ? 84 : 360;
-                    return Math.max(dataMax, target);
-                  }]}
+                  domain={[0, (dataMax: number) => Math.max(dataMax, target)]}
                   ticks={(() => {
-                    const target = reportView === 'week' ? 12 : reportView === 'month' ? 84 : 360;
                     // Nice round intermediate steps, but the final tick always lands
                     // exactly on the real goal (12/84/360) instead of overshooting it.
                     const ticks = niceTicks(target).filter(t => t <= target);
@@ -275,21 +191,19 @@ export const Water: React.FC<WaterProps> = ({ navigate }) => {
                     <ChartTooltip
                       unit="Glasses"
                       getTipMessage={(val) =>
-                        val >= (reportView === 'week' ? 12 : reportView === 'month' ? 84 : 360)
-                          ? 'Goal Achieved'
-                          : 'Hydration Pending'
+                        val >= target ? 'Goal Achieved' : 'Hydration Pending'
                       }
                     />
                   }
                 />
                 <ReferenceLine
-                  y={reportView === 'week' ? 12 : reportView === 'month' ? 84 : 360}
+                  y={target}
                   stroke="var(--ink)"
                   strokeOpacity={0.15}
                   strokeDasharray="4 4"
                   strokeWidth={1}
                   label={{
-                    value: reportView === 'week' ? '12' : reportView === 'month' ? '84' : '360',
+                    value: String(target),
                     position: 'insideTopRight',
                     fill: 'var(--ink)',
                     fontSize: 10,
@@ -298,8 +212,8 @@ export const Water: React.FC<WaterProps> = ({ navigate }) => {
                     fontFamily: 'Geist Mono, monospace',
                   }}
                 />
-                <Bar dataKey="glasses" maxBarSize={36} radius={[0, 0, 0, 0]}>
-                  {dynamicReports[reportView].map((_: any, i: number) => (
+                <Bar dataKey="value" maxBarSize={36} radius={[0, 0, 0, 0]}>
+                  {reports[reportView].map((_, i) => (
                     <Cell
                       key={i}
                       fill="var(--sepia)"

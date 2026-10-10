@@ -86,10 +86,11 @@ export async function verifyTouchID(credentialIds: string[]): Promise<VerifyResu
       },
     });
     return 'ok';
-  } catch (e: any) {
+  } catch (e) {
+    const name = (e as { name?: string })?.name;
     // NotAllowedError = user cancelled or wrong finger
     // NotFoundError / InvalidStateError = no matching credential on this device/domain
-    if (e?.name === 'NotFoundError' || e?.name === 'InvalidStateError') {
+    if (name === 'NotFoundError' || name === 'InvalidStateError') {
       return 'not_registered';
     }
     return 'wrong_finger';

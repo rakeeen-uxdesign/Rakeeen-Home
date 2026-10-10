@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useFirebaseSync } from '@/data/useFirebaseSync';
 import { uploadImage } from '@/lib/cloudinary';
 import {
-  IconSun as Sun, IconPlus as Plus, IconCamera as Camera, IconMoreVertical as MoreVertical,
-  IconLogOut as LogOut, IconMoon as Moon, IconPlay as Play,
+  IconSun as Sun, IconCamera as Camera, IconMoreVertical as MoreVertical,
+  IconLogOut as LogOut, IconMoon as Moon,
 } from '@/ui/icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/data/firebase';
@@ -13,25 +13,26 @@ import { useRingAnimation } from '@/ui/useRingAnimation';
 import { AppModal } from '@/ui/AppModal';
 import { getLogicalDate } from '@/domain/day';
 import { usePrayer } from '@/data/usePrayer';
-import { getDayPhase } from '@/domain/devotion/prayer';
+import { getDayMoments, getDayPhase, isFocusNightLocked, isWaterClosed } from '@/domain/devotion/prayer';
 import { getOccasionLine } from '@/domain/devotion/occasion';
 import {
   daysSinceActive, getAbsenceLine, getLiveFocusLine, getProgressLine, getWeatherLine, pickGreetingLine,
 } from '@/domain/greeting';
 import { getClockParts, HOME_TIME_ZONE } from '@/domain/clock';
 import { useWeather } from '@/data/useWeather';
+import { isDarkTheme, setTheme } from '@/lib/theme';
 import { useSleepLock } from '@/data/useSleepLock';
 import { useFridayGate } from '@/data/useFridayGate';
-import { DotMatrixText } from '@/ui/DotMatrixText';
-import { DMTimer, WavyRing } from '@/ui/TimerComponents';
-import { PixelDigits, PixelClock } from '@/ui/PixelFocusDisplay';
+import { PixelDigits } from '@/ui/PixelFocusDisplay';
 import { PixelDateTile } from '@/ui/PixelCalendar';
 import { getDateParts } from '@/domain/month';
-import { FocusCarousel } from '@/ui/FocusCarousel';
 import {
   MaskedValue, SidebarActiveVector, WaterVector, FocusVector, FinanceVector, TimeVector, MonthFingerprint,
 } from '@/features/home/components/visuals';
 import { TimeCardBody } from '@/features/home/components/TimeCard';
+import { WaterCardBody } from '@/features/home/components/WaterCard';
+import { FocusCardBody } from '@/features/home/components/FocusCard';
+import { FinanceCardBody } from '@/features/home/components/FinanceCard';
 
 interface HomeProps {
   navigate: (to: string) => void;
@@ -62,33 +63,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   const [financeBanks] = useFirebaseSync<Record<string, number>>('finance_banks', {});
   const [dailyHistory, setDailyHistory, dailyHistoryReady] = useFirebaseSync<Record<string, { water: number; focus: number; workout: number }>>('daily_history', {});
   const [dailyJournal, setDailyJournal] = useFirebaseSync<Record<string, string>>('daily_journal', {});
-  const [hydrationHistory] = useFirebaseSync<Record<string, number>>('hydration_history', {});
-  const [pomoHistory] = useFirebaseSync<Record<string, { sessions: number; minutes: number }>>('pomodoro_history', {});
 
-  // ONE-TIME patch: reconstruct Aug 1-3 2026 entries from hydration_history + pomodoro_history
-  // Remove this block after the data is recovered (check localStorage flag 'boomy_aug_patch_v1')
-  useEffect(() => {
-    if (!dailyHistoryReady) return;
-    if (localStorage.getItem('boomy_aug_patch_v1')) return;
-    const DAYS: Array<{ dateStr: string; iso: string }> = [
-      { dateStr: 'Sat Aug 01 2026', iso: '2026-08-01' },
-      { dateStr: 'Sun Aug 02 2026', iso: '2026-08-02' },
-      { dateStr: 'Mon Aug 03 2026', iso: '2026-08-03' },
-    ];
-    const patches: Record<string, { water: number; focus: number; workout: number }> = {};
-    for (const { dateStr, iso } of DAYS) {
-      const water = hydrationHistory[dateStr] ?? 0;
-      const focus = pomoHistory[dateStr]?.minutes ?? 0;
-      if (water > 0 || focus > 0) {
-        patches[iso] = { water, focus, workout: dailyHistory[iso]?.workout ?? 0 };
-      }
-    }
-    if (Object.keys(patches).length > 0) {
-      setDailyHistory(prev => ({ ...prev, ...patches }));
-      console.log('[Boomy patch] Restored Aug 1-3 data:', patches);
-    }
-    localStorage.setItem('boomy_aug_patch_v1', '1');
-  }, [dailyHistoryReady, hydrationHistory, pomoHistory]);
   const totalPhysical = Object.values(financeBanks).reduce((a, b) => a + (Number(b) || 0), 0);
 
   // Fitness/workout tracking removed (2026-09) — a separate food+workout system is
@@ -231,7 +206,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Theme management state
-  const [isDark, setIsDark] = useState(() => document.body.classList.contains('dark-theme'));
+  const [isDark, setIsDark] = useState(isDarkTheme);
   const [showMenu, setShowMenu] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -270,27 +245,9 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
 
 
   const toggleTheme = () => {
-    if (isDark) {
-      document.body.classList.remove('dark-theme');
-      setIsDark(false);
-      localStorage.setItem('theme', 'light');
-    } else {
-      document.body.classList.add('dark-theme');
-      setIsDark(true);
-      localStorage.setItem('theme', 'dark');
-    }
+    setTheme(!isDark);
+    setIsDark(!isDark);
   };
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-      document.body.classList.add('dark-theme');
-      setIsDark(true);
-    } else {
-      document.body.classList.remove('dark-theme');
-      setIsDark(false);
-    }
-  }, []);
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
@@ -448,23 +405,13 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   }, [journalEntry, greetingParts.before]);
 
   // Day is archived/reset at the real Maghrib time (from the prayer API, refreshed daily)
-  // and reopens at the real Fajr time — Water is locked in between. Falls back to fixed
-  // clock times if prayer times haven't loaded yet. Computed here (not just below, near
-  // the water button) because the priority effect right below also needs it.
-  const [fajrH, fajrM] = (times?.Fajr || '04:00').split(':').map(Number);
-  const todayFajr = new Date(now);
-  todayFajr.setHours(fajrH, fajrM, 0, 0);
-  const [maghribH, maghribM] = (times?.Maghrib || '18:00').split(':').map(Number);
-  const todayMaghrib = new Date(now);
-  todayMaghrib.setHours(maghribH, maghribM, 0, 0);
-  const waterLocked = now >= todayMaghrib || now < todayFajr;
+  // and reopens at the real Fajr time — Water is locked in between. Computed here (not just
+  // below, near the water button) because the priority effect right below also needs it.
+  const waterLocked = isWaterClosed(times, now);
   // New focus sessions can't be started between Isha and Fajr — same rule the Pomodoro
-  // page itself enforces (see Pomodoro.tsx's `nightLocked`); this mini "Start Focus"
-  // button is a second entry point into the same action, so it needs the same gate.
-  const [ishaH, ishaM] = (times?.Isha || '19:00').split(':').map(Number);
-  const todayIsha = new Date(now);
-  todayIsha.setHours(ishaH, ishaM, 0, 0);
-  const focusNightLocked = now >= todayIsha || now < todayFajr;
+  // page itself enforces; this mini "Start Focus" button is a second entry point into the
+  // same action, so it needs the same gate.
+  const focusNightLocked = isFocusNightLocked(times, now);
   const { friday, includedToday } = useFridayGate(now);
   const focusFridayLocked = friday && !includedToday;
 
@@ -473,7 +420,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
   // Smart active card prioritizing logic. Time is the default and always wins before
   // Fajr — even over a running focus session. After Fajr an active/overtime focus
   // session takes over until it ends, then it's back to Time.
-  const beforeFajr = now < todayFajr;
+  const beforeFajr = now.getTime() < getDayMoments(times, now).fajr;
   useEffect(() => {
     const priorityCardId: 'pomodoro' | null =
       (!beforeFajr && (pomodoroRunning || pomodoroOvertime)) ? 'pomodoro' : null;
@@ -579,7 +526,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: -10 }}
                   transition={{ type: 'spring', stiffness: 380, damping: 22 }}
-                  className="absolute right-0 mt-2 z-50 bg-[var(--paper-dark)] border border-ink p-2 shadow-lg flex items-center gap-2"
+                  className="absolute right-0 mt-2 z-50 bg-paper-dark border border-ink p-2 shadow-lg flex items-center gap-2"
                   style={{ borderRadius: 0 }}
                 >
                   {/* Theme Button */}
@@ -655,7 +602,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
               <div
                 key={card.id}
                 onClick={() => {
-                  setActiveCardId(card.id as any);
+                  setActiveCardId(card.id);
                   setLastManualClickTime(Date.now());
                 }}
                 // Water is the odd one out: double-click logs a glass instead of opening the page.
@@ -701,7 +648,7 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
                   {card.id === 'time' ? (
                     <span className="flex items-end gap-1.5 h-6 lg:h-[27px] pb-[5px]">
                       <PixelDigits mm={timeCard.hour} ss={timeCard.minute} color="var(--ink)" height="14px" flush />
-                      <span className="font-mono-main text-[9px] font-bold text-ink/50 leading-none">{timeCard.period}</span>
+                      <span className="font-mono-main text-[9px] font-bold leading-none">{timeCard.period}</span>
                     </span>
                   ) : (
                     <span className="font-mono-main text-[16px] lg:text-[18px] font-black block truncate">
@@ -760,180 +707,38 @@ export const Home: React.FC<HomeProps> = ({ navigate }) => {
               {/* Active Card Body Renderer */}
               <div className="flex-1 flex flex-col" style={{ opacity: bigCardVisible ? 1 : 0, transition: 'opacity 0.2s ease' }}>
               {displayedCardId === 'water' && (
-                <div className="flex-1 flex flex-col justify-between">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mt-1" >{`WATER`}</h2>
-                    </div>
-                    <div className="text-ink opacity-60">
-                      <WaterVector size={36} fillLevel={waterFillLevel} />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-8 mt-6">
-                    <div className="flex items-end gap-4">
-                      <DotMatrixText 
-                        text={String(glasses)} 
-                        dotSizeClassName="w-[12px] h-[12px] sm:w-[15px] sm:h-[15px]" 
-                        gapClassName="gap-[4px] sm:gap-[5px]" 
-                      />
-                      <span className="font-mono-main text-3xl sm:text-4xl font-bold text-ink/40 leading-none">
-                        / 12
-                      </span>
-                      <span className="font-sans-main text-sm font-bold uppercase tracking-wider text-ink/60 ml-2 leading-none">glasses today</span>
-                    </div>
-
-                    <button
-                      onClick={addWaterCup}
-                      disabled={waterLocked}
-                      className="btn-brutalist flex items-center gap-2 font-mono-main py-3 px-6 text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      <Plus size={18} />
-                      {waterLocked ? 'Reopens at Fajr' : 'Add Glass'}
-                    </button>
-                  </div>
-                </div>
+                <WaterCardBody
+                  glasses={glasses}
+                  fillLevel={waterFillLevel}
+                  locked={waterLocked}
+                  onAddGlass={addWaterCup}
+                />
               )}
 
               {displayedCardId === 'pomodoro' && (
-                <div className="flex-1 flex flex-col justify-between">
-                  {(pomodoroRunning || pomodoroOvertime || pomodoroPaused) ? (
-                    <>
-                      {/* Top — status strip, mirrors idle header. Paused gets its own
-                          dimmed label — the resume control sits below, under the timer. */}
-                      <div className="flex justify-between items-start">
-                        <span className="font-mono-main text-[10px] font-bold tracking-[0.25em] uppercase"
-                          style={{
-                            color: pomodoroOvertime ? 'var(--pomo-overtime)' : mode === 'break' ? 'var(--pomo-break)' : 'var(--pomo-focus)',
-                            opacity: pomodoroPaused ? 0.4 : 1,
-                          }}>
-                          {pomodoroOvertime ? '● OVERTIME' : pomodoroPaused ? '● PAUSED' : `● ${mode.toUpperCase()}`}
-                        </span>
-                      </div>
-
-                      {/* Middle — ring (same motion as the full Focus page) beside the dot-matrix
-                          countdown, swipeable with a second pixel-art face */}
-                      {(() => {
-                        const secs = pomodoroOvertime ? overtime : timeLeft;
-                        const totalMins = Math.floor(secs / 60);
-                        const mm = totalMins >= 100 ? String(totalMins) : String(totalMins).padStart(2, '0');
-                        const ss = String(secs % 60).padStart(2, '0');
-                        const col = pomodoroOvertime ? 'var(--pomo-overtime)' : mode === 'break' ? 'var(--pomo-break)' : 'var(--pomo-focus)';
-                        return (
-                          <div className="flex-1 flex items-center justify-center w-full">
-                            <FocusCarousel
-                persistKey="focus_face"
-                              dotColor={col}
-                              pages={[
-                                <div className="flex items-center justify-center gap-6 w-full">
-                                  <div className="shrink-0 w-[110px] h-[110px] sm:w-[140px] sm:h-[140px]">
-                                    <WavyRing
-                                      pct={focusRingSmoothPct}
-                                      phase={focusRingPhase}
-                                      mode={mode}
-                                      isOvertime={pomodoroOvertime}
-                                      size={140}
-                                      waves={mode === 'focus' ? focusDuration : breakDuration}
-                                      rotation={focusRingRotation}
-                                    />
-                                  </div>
-                                  <DMTimer mm={mm} ss={ss} color={col} maxWidth="min(100%, 340px)" />
-                                </div>,
-                                <div className="flex items-center justify-center gap-6 w-full">
-                                  <div className="shrink-0">
-                                    <PixelClock
-                                      elapsedSeconds={pomodoroOvertime ? pomodoroTotalSecs + overtime : pomodoroTotalSecs - timeLeft}
-                                      mode={mode}
-                                      running={pomodoroRunning}
-                                      isOvertime={pomodoroOvertime}
-                                      width="clamp(84px, 14vw, 128px)"
-                                    />
-                                  </div>
-                                  <PixelDigits mm={mm} ss={ss} color={col} maxWidth="min(100%, 300px)" />
-                                </div>,
-                              ]}
-                            />
-                          </div>
-                        );
-                      })()}
-
-                      {pomodoroPaused && (
-                        <div className="flex justify-center">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); pomodoroStart(); }}
-                            className="w-12 h-12 border border-ink flex items-center justify-center transition-all bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 cursor-pointer"
-                            title="Resume"
-                          >
-                            <Play size={18} />
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex justify-between items-start">
-                        <div>
-                              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mt-1" >{`YOUR FOCUS`}</h2>
-                        </div>
-                        <div className="text-ink opacity-60">
-                          <FocusVector size={36} paused={focusPaused} />
-                        </div>
-                      </div>
-
-                      <div className="flex items-end justify-between gap-4">
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-mono-main text-5xl sm:text-7xl lg:text-8xl font-black text-ink leading-none">
-                            {focusMinutes > 0 ? focusHours : '0'}
-                          </span>
-                          <span className="font-mono-main text-3xl font-bold text-ink/40">h</span>
-                          <span className="font-sans-main text-xs font-bold uppercase tracking-wider text-ink/60 ml-1">focused today</span>
-                        </div>
-
-                        <button
-                          onClick={(e) => { e.stopPropagation(); if (!focusNightLocked && !focusFridayLocked) pomodoroStart(); }}
-                          disabled={focusNightLocked || focusFridayLocked}
-                          title={focusNightLocked ? 'Reopens at Fajr' : focusFridayLocked ? 'Include today from the Water page first' : undefined}
-                          className="btn-brutalist shrink-0 flex items-center gap-2 px-5 py-3 text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-                            <polygon points="2,1 9,5 2,9" />
-                          </svg>
-                          {focusNightLocked ? 'REOPENS AT FAJR' : 'START FOCUS'}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
+                <FocusCardBody
+                  running={pomodoroRunning}
+                  overtime={pomodoroOvertime}
+                  paused={pomodoroPaused}
+                  mode={mode}
+                  overtimeSeconds={overtime}
+                  timeLeft={timeLeft}
+                  totalSecs={pomodoroTotalSecs}
+                  ringPhase={focusRingPhase}
+                  ringRotation={focusRingRotation}
+                  ringSmoothPct={focusRingSmoothPct}
+                  focusDuration={focusDuration}
+                  breakDuration={breakDuration}
+                  onResume={(e) => { e.stopPropagation(); pomodoroStart(); }}
+                  focusMinutes={focusMinutes}
+                  focusHours={focusHours}
+                  nightLocked={focusNightLocked}
+                  fridayLocked={focusFridayLocked}
+                  onStart={(e) => { e.stopPropagation(); if (!focusNightLocked && !focusFridayLocked) pomodoroStart(); }}
+                />
               )}
 
-
-              {displayedCardId === 'finance' && (
-                <div className="flex-1 flex flex-col justify-between">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mt-1" >{`FINANCE`}</h2>
-                    </div>
-                    <div className="text-ink opacity-60">
-                      <FinanceVector size={36} />
-                    </div>
-                  </div>
-
-                  <div className="flex items-end gap-4">
-                    <div className="flex items-baseline gap-2">
-                      {totalPhysical > 0 ? (
-                        <MaskedValue className="text-4xl sm:text-5xl lg:text-6xl leading-none">
-                          <span className="font-mono-main font-black text-ink">
-                            {Math.round(totalPhysical).toLocaleString()}
-                          </span>
-                          <span className="font-mono-main text-2xl font-bold text-ink/40 ml-2">EGP</span>
-                        </MaskedValue>
-                      ) : (
-                        <span className="font-mono-main text-4xl sm:text-5xl lg:text-6xl font-black text-ink leading-none">—</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+              {displayedCardId === 'finance' && <FinanceCardBody totalPhysical={totalPhysical} />}
 
               {displayedCardId === 'time' && <TimeCardBody clock={timeCard} />}
               </div>

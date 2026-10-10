@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeNextPrayer, isSleepWindow, getDayPhase, getDayMoments } from '@/domain/devotion/prayer';
+import { computeNextPrayer, isSleepWindow, getDayPhase, getDayMoments, isWaterClosed, isFocusNightLocked } from '@/domain/devotion/prayer';
 
 const times = { Fajr: '04:24', Dhuhr: '12:03', Asr: '15:36', Maghrib: '18:30', Isha: '19:52' };
 
@@ -83,6 +83,30 @@ describe('getDayMoments', () => {
   it('fills any missing prayer with a typical time', () => {
     const m = getDayMoments({}, new Date('2026-09-10T09:00:00'));
     expect(new Date(m.isha).getHours()).toBe(19);
-    expect(new Date(m.isha).getMinutes()).toBe(30);
+    expect(new Date(m.isha).getMinutes()).toBe(0);
+  });
+});
+
+describe('locks', () => {
+  const t = { Fajr: '04:24', Dhuhr: '12:03', Asr: '15:36', Maghrib: '18:30', Isha: '19:52' };
+  const at = (hhmm: string) => new Date(`2026-09-10T${hhmm}:00`);
+
+  it('water is closed from Maghrib until Fajr', () => {
+    expect(isWaterClosed(t, at('03:00'))).toBe(true);
+    expect(isWaterClosed(t, at('04:30'))).toBe(false);
+    expect(isWaterClosed(t, at('18:29'))).toBe(false);
+    expect(isWaterClosed(t, at('18:30'))).toBe(true);
+  });
+
+  it('new focus is locked from Isha until Fajr — later than the water lock', () => {
+    expect(isFocusNightLocked(t, at('19:00'))).toBe(false);
+    expect(isFocusNightLocked(t, at('19:52'))).toBe(true);
+    expect(isFocusNightLocked(t, at('04:00'))).toBe(true);
+    expect(isFocusNightLocked(t, at('05:00'))).toBe(false);
+  });
+
+  it('falls back to typical times before the prayer times load', () => {
+    expect(isWaterClosed(undefined, at('18:30'))).toBe(true);
+    expect(isFocusNightLocked({}, at('12:00'))).toBe(false);
   });
 });

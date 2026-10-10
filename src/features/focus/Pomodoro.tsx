@@ -1,9 +1,13 @@
 import React, { useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { FilterSelect, PERIOD_OPTIONS } from '@/ui/FilterSelect';
+import { buildFocusReports, focusTargetHours } from '@/domain/focus/report';
+import { isFocusNightLocked } from '@/domain/devotion/prayer';
+import type { ReportView } from '@/domain/report';
+import { Tabs } from '@/ui/Tabs';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, ReferenceLine } from 'recharts';
 import { formatTime } from '@/lib/format';
 import { niceTicks } from '@/lib/charts';
-import { ChartTooltip } from '@/ui/UIComponents';
+import { ChartTooltip } from '@/ui/ChartTooltip';
 import {
   IconPlay as Play, IconPause as Pause, IconRotateCcw as RotateCcw,
   IconArrowLeft as ArrowLeft, IconChevronRight as ChevronRight,
@@ -23,38 +27,31 @@ interface PomodoroProps {
 
 
 
-const getTip = (value: number, type: string, reportType: 'sessions' | 'minutes') => {
-  let target = reportType === 'sessions' ? 25 : 10;
-  if (type === 'month') target *= 7;
-  if (type === 'year') target *= 30;
+const getTip = (value: number, view: ReportView) => {
+  const target = focusTargetHours(view);
   if (value >= target) return "Elite Focus!";
   if (value >= target * 0.7) return "Almost there!";
   return "Keep pushing";
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+const PAGE_TABS = [{ value: 'focus', label: 'Focus Time' }, { value: 'analysis', label: 'Analysis' }] as const;
+
 export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
   const {
     timeLeft, overtime, isOvertime, running, mode, sessions, weekStats, history, todayIdx,
-    focusDuration, breakDuration, setFocusDuration, setBreakDuration,
+    focusDuration, breakDuration,
     start, pause, reset, startBreak, startNewSession, skipBreak, saveProgress
   } = usePomodoro();
   const { friday, includedToday } = useFridayGate();
   const fridayLocked = friday && !includedToday;
 
   // New sessions can't be started between Isha and the real Fajr time (both from the
-  // prayer API, refreshed daily, same as Water's own Maghrib→Fajr lock). Falls back to
-  // fixed clock times if prayer times haven't loaded yet.
+  // prayer API, refreshed daily, same as Water's own Maghrib→Fajr lock).
   const { times: pomoTimes } = usePrayer();
-  const [pomoFajrH, pomoFajrM] = (pomoTimes?.Fajr || '04:00').split(':').map(Number);
-  const todayFajr = new Date();
-  todayFajr.setHours(pomoFajrH, pomoFajrM, 0, 0);
-  const [pomoIshaH, pomoIshaM] = (pomoTimes?.Isha || '19:00').split(':').map(Number);
-  const todayIsha = new Date();
-  todayIsha.setHours(pomoIshaH, pomoIshaM, 0, 0);
-  const nightLocked = new Date() >= todayIsha || new Date() < todayFajr;
+  const nightLocked = isFocusNightLocked(pomoTimes);
 
-  const [view, setView] = React.useState<'week' | 'month' | 'year'>('week');
+  const [view, setView] = React.useState<ReportView>('week');
   const [pomTab, setPomTab] = React.useState<'focus' | 'analysis'>('focus');
 
   // Declare early so useRingAnimation below can reference them
@@ -80,82 +77,8 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
     return 'var(--ink)';
   };
 
-  const getDynamicReports = () => {
-    const now = new Date();
-    const todayStr = now.toDateString();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const focusMinsToday = Math.round(weekStats?.[todayIdx]?.minutes || 0);
-
-    // WEEK
-    const getStartOfWeek = (d: Date): Date => {
-      const date = new Date(d);
-      const day = date.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
-      const diff = (day + 1) % 7; 
-      date.setDate(date.getDate() - diff);
-      date.setHours(0, 0, 0, 0);
-      return date;
-    };
-
-    const startOfWeek = getStartOfWeek(now);
-    const weekDays = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-    const weekData = weekDays.map((name, i) => {
-      const date = new Date(startOfWeek);
-      date.setDate(startOfWeek.getDate() + i);
-      const dateStr = date.toDateString();
-      const isFuture = date > now && dateStr !== todayStr;
-      
-      if (isFuture) return { name, sessions: 0, minutes: 0 };
-      if (dateStr === todayStr) return { name, sessions, minutes: focusMinsToday };
-      
-      const hEntry = history[dateStr];
-      return { 
-        name,
-        sessions: hEntry?.sessions || 0,
-        minutes: hEntry?.minutes || 0
-      };
-    });
-
-    // MONTH
-    const monthData = [
-      { name: 'Week 1', sessions: 0, minutes: 0 },
-      { name: 'Week 2', sessions: 0, minutes: 0 },
-      { name: 'Week 3', sessions: 0, minutes: 0 },
-      { name: 'Week 4', sessions: 0, minutes: 0 },
-    ];
-    Object.entries(history).forEach(([dateStr, val]) => {
-      const d = new Date(dateStr);
-      if (d.getMonth() === currentMonth && d.getFullYear() === currentYear && dateStr !== todayStr) {
-        const weekIdx = Math.min(Math.floor((d.getDate() - 1) / 7), 3);
-        monthData[weekIdx].sessions += (val.sessions || 0);
-        monthData[weekIdx].minutes += (val.minutes || 0);
-      }
-    });
-    const todayWeekIdx = Math.min(Math.floor((now.getDate() - 1) / 7), 3);
-    monthData[todayWeekIdx].sessions += sessions;
-    monthData[todayWeekIdx].minutes += focusMinsToday;
-
-    // YEAR
-    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const yearData = monthNames.map(name => ({ name, sessions: 0, minutes: 0 }));
-    Object.entries(history).forEach(([dateStr, val]) => {
-      const d = new Date(dateStr);
-      if (d.getFullYear() === currentYear && dateStr !== todayStr) {
-        yearData[d.getMonth()].sessions += (val.sessions || 0);
-        yearData[d.getMonth()].minutes += (val.minutes || 0);
-      }
-    });
-    yearData[currentMonth].sessions += sessions;
-    yearData[currentMonth].minutes += focusMinsToday;
-
-    return { week: weekData, month: monthData, year: yearData };
-  };
-
-  const dynamicReports = getDynamicReports();
-  // Chart always shows hours now — the sessions/hours toggle was removed, but the
-  // sessions count still shows in the subtitle above the chart.
-  const reportType = 'minutes' as const;
-  const DAILY_TARGET_HOURS = 10;
+  const focusMinsToday = Math.round(weekStats?.[todayIdx]?.minutes || 0);
+  const reports = buildFocusReports(history, focusMinsToday, new Date());
 
   const controls = (
     <div className="flex flex-col items-center gap-4">
@@ -193,7 +116,7 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
             <button
               onClick={running ? pause : start}
               disabled={!running && (fridayLocked || nightLocked)}
-              className="w-12 h-12 border border-ink flex items-center justify-center transition-all bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 cursor-pointer animate-none disabled:opacity-30 disabled:cursor-not-allowed"
+              className="w-12 h-12 border border-ink flex items-center justify-center transition-all bg-ink text-paper hover:opacity-90 cursor-pointer animate-none disabled:opacity-30 disabled:cursor-not-allowed"
               title={
                 running ? 'Pause'
                 : fridayLocked ? "Include today from the Water page first"
@@ -249,36 +172,20 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
             <span className="font-mono-main text-[10px] uppercase tracking-[0.25em] font-bold text-ink/50">Focus</span>
           </div>
 
-          <div className="flex flex-col">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
             <h1 className="font-sans-main text-4xl sm:text-5xl md:text-6xl font-black uppercase tracking-tight text-ink">
               FOCUS TIME
             </h1>
+            <Tabs
+              layoutId="pomodoroTab"
+              ruled
+              value={pomTab}
+              onChange={setPomTab}
+              options={PAGE_TABS}
+              className="md:mb-1"
+            />
           </div>
         </header>
-
-        {/* TABS */}
-        <div className="w-full max-w-[1000px] mx-auto mb-6">
-          <div className="flex border border-ink/20 overflow-hidden relative bg-[var(--paper-dark)] w-fit">
-            {(['focus', 'analysis'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setPomTab(tab)}
-                className="relative font-mono-main text-[10px] uppercase tracking-widest font-bold px-6 py-2.5 cursor-pointer transition-colors duration-200"
-                style={{ color: pomTab === tab ? 'var(--paper)' : 'var(--ink)' }}
-              >
-                {pomTab === tab && (
-                  <motion.div
-                    layoutId="pomTabBg"
-                    className="absolute inset-0 bg-[var(--ink)]"
-                    transition={{ type: 'spring', stiffness: 450, damping: 36 }}
-                    style={{ zIndex: 0 }}
-                  />
-                )}
-                <span className="relative z-10">{tab === 'focus' ? 'Focus Time' : 'Analysis'}</span>
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* MAIN CONTENT */}
         <main className="w-full max-w-[1000px] mx-auto flex flex-col gap-6">
@@ -365,40 +272,16 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                {/* Period switch tab with sliding animation */}
-                <div className="flex border border-ink/20 overflow-hidden relative bg-[var(--paper-dark)]">
-                  {(['week', 'month', 'year'] as const).map((v) => (
-                    <button
-                      key={v}
-                      onClick={() => setView(v)}
-                      className="relative font-mono-main text-[10px] uppercase tracking-widest font-bold px-4 py-2 cursor-pointer transition-colors duration-200"
-                      style={{
-                        color: view === v ? 'var(--paper)' : 'var(--ink)',
-                      }}
-                    >
-                      {view === v && (
-                        <motion.div
-                          layoutId="pomodoroPeriodTabBg"
-                          className="absolute inset-0 bg-[var(--ink)]"
-                          transition={{ type: 'spring', stiffness: 450, damping: 36 }}
-                          style={{ zIndex: 0 }}
-                        />
-                      )}
-                      <span className="relative z-10">{v}</span>
-                    </button>
-                  ))}
-                </div>
+                {/* Period switch */}
+                <FilterSelect label="Period" value={view} onChange={setView} options={PERIOD_OPTIONS} />
               </div>
             </div>
 
             {/* Chart */}
             <div className="h-[240px] w-full">
               <ResponsiveContainer>
-                <BarChart 
-                  data={dynamicReports[view].map((d: any) => ({ 
-                    ...d, 
-                    displayHours: Number((d.minutes / 60).toFixed(2))
-                  }))} 
+                <BarChart
+                  data={reports[view]}
                   margin={{ top: 20, right: 10, left: 0, bottom: 0 }}
                 >
                   <CartesianGrid vertical={false} stroke="var(--ink)" strokeOpacity={0.05} strokeDasharray="0" />
@@ -411,39 +294,24 @@ export const Pomodoro: React.FC<PomodoroProps> = ({ navigate }) => {
                     tick={{ fill: 'var(--ink)', opacity: 0.4, fontSize: 10, fontWeight: 700, fontFamily: 'Geist Mono, monospace' }} 
                     axisLine={false} tickLine={false}
                     width={35}
-                    domain={[0, (dataMax: number) => {
-                      let target = reportType === 'sessions' ? 25 : DAILY_TARGET_HOURS;
-                      if (view === 'month') target *= 7;
-                      if (view === 'year') target *= 30;
-                      return Math.max(dataMax, target);
-                    }]}
-                    ticks={(() => {
-                      let base = reportType === 'sessions' ? 25 : 10;
-                      if (view === 'month') base *= 7;
-                      if (view === 'year') base *= 30;
-                      return niceTicks(base);
-                    })()}
+                    domain={[0, (dataMax: number) => Math.max(dataMax, focusTargetHours(view))]}
+                    ticks={niceTicks(focusTargetHours(view))}
                   />
                   <Tooltip
                     cursor={{ fill: 'var(--ink)', fillOpacity: 0.04 }}
-                    content={<ChartTooltip unit={reportType === 'sessions' ? 'Sessions' : 'Hours'} getTipMessage={(val) => getTip(val, view, reportType)} />}
+                    content={<ChartTooltip unit="Hours" getTipMessage={(val) => getTip(val, view)} />}
                   />
                   
-                  <ReferenceLine 
-                    y={(() => {
-                      let target = reportType === 'sessions' ? 25 : DAILY_TARGET_HOURS;
-                      if (view === 'month') target *= 7;
-                      if (view === 'year') target *= 30;
-                      return target;
-                    })()} 
+                  <ReferenceLine
+                    y={focusTargetHours(view)}
                     stroke="var(--forest)" 
                     strokeDasharray="6 6" 
                     strokeOpacity={0.4}
                     strokeWidth={1.5}
                   />
 
-                  <Bar dataKey={reportType === 'sessions' ? 'sessions' : 'displayHours'} radius={[0, 0, 0, 0]} maxBarSize={32}>
-                    {dynamicReports[view].map((_: any, i: number) => (
+                  <Bar dataKey="hours" radius={[0, 0, 0, 0]} maxBarSize={32}>
+                    {reports[view].map((_, i) => (
                       <Cell key={i} fill="var(--sepia)" fillOpacity={0.9} />
                     ))}
                   </Bar>

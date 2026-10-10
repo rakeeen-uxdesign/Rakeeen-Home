@@ -27,11 +27,6 @@ export function getLogicalDate(now: Date = new Date()): Date {
   return new Date(now);
 }
 
-/** Weekday index (Mon-first) of the logical day. */
-export function getTodayIdx(now: Date = new Date()): number {
-  return mondayFirstIndex(getLogicalDate(now));
-}
-
 /** The day a focus session counts toward — the real calendar day, no rollback. */
 export function getPomoLogicalDate(now: Date = new Date()): Date {
   return new Date(now);

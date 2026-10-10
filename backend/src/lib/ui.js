@@ -9,7 +9,7 @@ import { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'disc
  * (src/styles/global.css), so a card here reads as the same product, not a
  * reskin — kept in sync by hand since the two codebases don't share a build.
  */
-export const BRAND = {
+const BRAND = {
   water:   { color: 0x5EC8B0, label: 'Water' },
   focus:   { color: 0xD7EA6C, label: 'Focus' },
   finance: { color: 0xE8C04A, label: 'Finance' },

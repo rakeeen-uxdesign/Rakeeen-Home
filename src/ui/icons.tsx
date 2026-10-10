@@ -18,8 +18,8 @@ import React from 'react';
 import {
   Refresh01Icon, Undo02Icon, PlusSignIcon, ArrowLeft01Icon, ArrowRight01Icon,
   Sun01Icon, Moon01Icon, Camera01Icon, MoreVerticalIcon, Logout04Icon,
-  Money01Icon, Wallet01Icon, Delete02Icon, MinusSignIcon, PencilEdit01Icon,
-  PlayIcon, PauseIcon, Cancel01Icon, LockIcon, Login03Icon,
+  Money01Icon, Delete02Icon, PencilEdit01Icon,
+  PlayIcon, PauseIcon, LockIcon, Login03Icon,
   ArrowDown01Icon,
 } from '@hugeicons/core-free-icons';
 
@@ -70,14 +70,10 @@ export const IconCamera = createIcon(Camera01Icon as HugeIconData, 'Camera');
 export const IconMoreVertical = createIcon(MoreVerticalIcon as HugeIconData, 'MoreVertical');
 export const IconLogOut = createIcon(Logout04Icon as HugeIconData, 'LogOut');
 export const IconBanknote = createIcon(Money01Icon as HugeIconData, 'Banknote');
-export const IconWallet = createIcon(Wallet01Icon as HugeIconData, 'Wallet');
 export const IconTrash2 = createIcon(Delete02Icon as HugeIconData, 'Trash2');
-export const IconMinus = createIcon(MinusSignIcon as HugeIconData, 'Minus');
 export const IconPencil = createIcon(PencilEdit01Icon as HugeIconData, 'Pencil');
 export const IconPlay = createIcon(PlayIcon as HugeIconData, 'Play');
 export const IconPause = createIcon(PauseIcon as HugeIconData, 'Pause');
-export const IconX = createIcon(Cancel01Icon as HugeIconData, 'X');
-export const IconClose = createIcon(Cancel01Icon as HugeIconData, 'Close');
 export const IconLock = createIcon(LockIcon as HugeIconData, 'Lock');
 export const IconLogin = createIcon(Login03Icon as HugeIconData, 'Login');
 export const IconChevronDown = createIcon(ArrowDown01Icon as HugeIconData, 'ChevronDown');

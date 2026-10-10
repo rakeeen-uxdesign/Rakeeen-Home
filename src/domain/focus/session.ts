@@ -8,3 +8,29 @@
 export function breakMinutesFor(focusGainedMinutes: number): number {
   return Math.max(1, Math.round(focusGainedMinutes * 0.2));
 }
+
+/** One day of Focus: how many sessions were finished and how many minutes they added up to. */
+export interface FocusDayStats {
+  sessions: number;
+  minutes: number;
+}
+
+/** A day in the Focus week array. The seed data only has `sessions`; `minutes` appears once something is logged. */
+export interface FocusWeekDay {
+  day?: string;
+  sessions: number;
+  minutes?: number;
+}
+
+/** One finished session in today's log. */
+export interface FocusLogEntry {
+  time: string;
+  duration: number;
+}
+
+/** The week with one more session, of `focusedMinutes`, counted on day `dayIndex`. Doesn't mutate `week`. */
+export function recordSession(week: FocusWeekDay[], dayIndex: number, focusedMinutes: number): FocusWeekDay[] {
+  return week.map((day, i) =>
+    i === dayIndex ? { ...day, sessions: day.sessions + 1, minutes: (day.minutes || 0) + focusedMinutes } : day,
+  );
+}

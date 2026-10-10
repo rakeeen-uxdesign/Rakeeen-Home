@@ -1,48 +1,46 @@
 import { useEffect } from 'react';
 import { useFirebaseSync } from '@/data/useFirebaseSync';
+import { EMPTY_BANKS, EMPTY_BUCKETS } from '@/domain/finance/defaults';
+import { BUCKET_ORDER, type Percentages } from '@/domain/finance/split';
 import type {
-  FinanceBanks, FinanceBuckets, FinanceTransaction,
+  FinanceBanks, FinanceBuckets,
   GoldAsset, Subscription, FinanceLog, Debt,
 } from '@/domain/finance/types';
 
-const DEFAULT_BANKS: FinanceBanks = { cib: 0, ahly_main: 0, ahly_meeza: 0, bm: 0 };
-const DEFAULT_BUCKETS: FinanceBuckets = { tawarr2: 0, mustaqbal: 0, basmala: 0, mariam: 0, sadaqa: 0 };
-
-const VALID_BUCKET_KEYS = new Set<string>(['tawarr2', 'mustaqbal', 'basmala', 'mariam', 'sadaqa']);
+const VALID_BUCKET_KEYS = new Set<string>(BUCKET_ORDER);
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 export function useFinance() {
-  const [banks, setBanks] = useFirebaseSync<FinanceBanks>('finance_banks', DEFAULT_BANKS);
-  const [buckets, setBuckets] = useFirebaseSync<FinanceBuckets>('finance_buckets', DEFAULT_BUCKETS);
-  const [transactions] = useFirebaseSync<FinanceTransaction[]>('finance_transactions', []);
+  const [banks, setBanks] = useFirebaseSync<FinanceBanks>('finance_banks', EMPTY_BANKS);
+  const [buckets, setBuckets] = useFirebaseSync<FinanceBuckets>('finance_buckets', EMPTY_BUCKETS);
   const [gold, setGold] = useFirebaseSync<GoldAsset[]>('finance_gold', []);
-  const [subscriptions, setSubscriptionsRaw] = useFirebaseSync<Subscription[]>('finance_subscriptions', []);
+  const [subscriptions, setSubscriptionsSynced] = useFirebaseSync<Subscription[]>('finance_subscriptions', []);
   const [debts, setDebts] = useFirebaseSync<Debt[]>('finance_debts', []);
   const [logs, setLogs] = useFirebaseSync<FinanceLog[]>('finance_logs', []);
+  // How the last income was split (each bucket's share, in percent) — the next one starts from it.
+  const [splitTemplate, setSplitTemplate] = useFirebaseSync<Percentages>('finance_split_template', {});
 
-  // Migrate old bucket structure to new 4-bucket schema (zeros everything)
+  // Buckets saved under an older set of keys can't be mapped onto the current five, so reset them.
   useEffect(() => {
     if (!buckets) return;
     const hasOldKey = Object.keys(buckets).some(k => !VALID_BUCKET_KEYS.has(k));
     if (hasOldKey) {
-      setBuckets(DEFAULT_BUCKETS);
+      setBuckets(EMPTY_BUCKETS);
     }
   }, [buckets]);
 
-  // Push subscriptions to the local reminder bot whenever they change
-  // (best-effort — the bot is optional and may be offline).
-  useEffect(() => {
-    if (!subscriptions) return;
+  // The reminder bot reads subscriptions from Firestore itself (on start, then every 30 minutes);
+  // this just tells it about an edit straight away. Best-effort — the bot is optional and often
+  // off, so a failed push is ignored, and nothing is pushed on load.
+  const setSubscriptions = async (next: Subscription[]) => {
+    await setSubscriptionsSynced(next);
     fetch(`${BACKEND_URL}/api/subscriptions/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(subscriptions),
+      body: JSON.stringify(next),
     }).catch(() => {});
-  }, [subscriptions]);
-
-  const totalPhysical = (Object.values(banks) as number[]).reduce((a, b) => a + b, 0);
-  const totalVirtual = (Object.values(buckets) as number[]).reduce((a, b) => a + b, 0);
+  };
 
   const updateBankBalance = async (bankKey: keyof FinanceBanks, amount: number) => {
     await setBanks({ ...banks, [bankKey]: amount });
@@ -68,13 +66,13 @@ export function useFinance() {
   return {
     banks,
     buckets,
-    transactions,
-    totalPhysical,
-    totalVirtual,
+    setBuckets,
+    splitTemplate,
+    setSplitTemplate,
     gold,
     setGold,
     subscriptions,
-    setSubscriptions: setSubscriptionsRaw,
+    setSubscriptions,
     debts,
     setDebts,
     updateBankBalance,

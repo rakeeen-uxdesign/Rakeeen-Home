@@ -102,7 +102,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('scroll', onScroll, { capture: true, passive: true });
     return () => {
-      window.removeEventListener('scroll', onScroll, { capture: true } as any);
+      window.removeEventListener('scroll', onScroll, true);
       if (idleTimer) clearTimeout(idleTimer);
     };
   }, []);

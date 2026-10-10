@@ -16,7 +16,7 @@ function balanceToDuration(balance: number): number {
 }
 
 // CIB — diamond star network; dots radiate center→out, wave reflects balance speed
-export const CIBVector: React.FC<{ balance: number }> = ({ balance }) => {
+const CIBVector: React.FC<{ balance: number }> = ({ balance }) => {
   const d = balanceToDuration(balance);
   const dots: [number, number, number][] = [
     [12, 12, 0],
@@ -35,7 +35,7 @@ export const CIBVector: React.FC<{ balance: number }> = ({ balance }) => {
 };
 
 // Ahly Main — ankh ☥ (Egyptian cross); loop → crossbar → stem, wave = balance
-export const AhlyMainVector: React.FC<{ balance: number }> = ({ balance }) => {
+const AhlyMainVector: React.FC<{ balance: number }> = ({ balance }) => {
   const d = balanceToDuration(balance);
   const dots: [number, number, number][] = [
     // oval loop top→right→bottom→left
@@ -69,7 +69,7 @@ export const AhlyMainVector: React.FC<{ balance: number }> = ({ balance }) => {
 };
 
 // Ahly Meeza — card outline + stripe; sweep clockwise, speed = balance
-export const AhlyMeezaVector: React.FC<{ balance: number }> = ({ balance }) => {
+const AhlyMeezaVector: React.FC<{ balance: number }> = ({ balance }) => {
   const d = balanceToDuration(balance);
   const dots: [number, number, number][] = [
     // top edge L→R
@@ -94,7 +94,7 @@ export const AhlyMeezaVector: React.FC<{ balance: number }> = ({ balance }) => {
 };
 
 // Banque Misr — pyramid; wave from apex→base, speed = balance
-export const BanqueMisrVector: React.FC<{ balance: number }> = ({ balance }) => {
+const BanqueMisrVector: React.FC<{ balance: number }> = ({ balance }) => {
   const d = balanceToDuration(balance);
   const rows: [number, number, number][][] = [
     [[12, 3, 0]],
@@ -116,7 +116,8 @@ export const BanqueMisrVector: React.FC<{ balance: number }> = ({ balance }) => 
 
 // Animated price number — flashes green/red on change
 // Spinning vector that hides the value until hover
-export const MaskedValue: React.FC<{ children: React.ReactNode; className?: string; disabled?: boolean }> = ({ children, className = '', disabled = false }) => {
+/** `align="end"` draws the mask against the right edge, for amounts that sit flush right. */
+export const MaskedValue: React.FC<{ children: React.ReactNode; className?: string; disabled?: boolean; align?: 'start' | 'end' }> = ({ children, className = '', disabled = false, align = 'start' }) => {
   const [revealed, setRevealed] = useState(false);
   if (disabled) return <span className={className}>{children}</span>;
   return (
@@ -127,7 +128,7 @@ export const MaskedValue: React.FC<{ children: React.ReactNode; className?: stri
     >
       {/* Spinning asterisk mask — positioned absolute so container = value width */}
       <span
-        className="absolute inset-0 flex items-center justify-start transition-opacity duration-200"
+        className={`absolute inset-0 flex items-center transition-opacity duration-200 ${align === 'end' ? 'justify-end' : 'justify-start'}`}
         style={{ opacity: revealed ? 0 : 1, pointerEvents: 'none' }}
         aria-hidden
       >
@@ -189,6 +190,8 @@ export const BANK_LABELS: Record<keyof FinanceBanks, string> = {
   bm: 'Banque Misr',
 };
 
+export const BANK_KEYS = Object.keys(BANK_LABELS) as Array<keyof FinanceBanks>;
+
 export const BANK_VECTORS: Record<keyof FinanceBanks, React.ComponentType<{ balance: number }>> = {
   cib: CIBVector,
   ahly_main: AhlyMainVector,
@@ -197,7 +200,7 @@ export const BANK_VECTORS: Record<keyof FinanceBanks, React.ComponentType<{ bala
 };
 
 // Mustaqbal — shield outline (safe / vault)
-export const MustaqbalVector: React.FC<{ balance: number }> = ({ balance }) => {
+const MustaqbalVector: React.FC<{ balance: number }> = ({ balance }) => {
   const d = balanceToDuration(balance);
   const dots: [number, number, number][] = [
     [12, 2,  0   ], [17, 4,  0.08], [20, 8,  0.16], [20, 13, 0.24],
@@ -216,7 +219,7 @@ export const MustaqbalVector: React.FC<{ balance: number }> = ({ balance }) => {
 };
 
 // Tawarr2 — lightning bolt (urgent, emergency)
-export const Tawarr2Vector: React.FC<{ balance: number }> = ({ balance }) => {
+const Tawarr2Vector: React.FC<{ balance: number }> = ({ balance }) => {
   const d = balanceToDuration(balance);
   const dots: [number, number, number][] = [
     [16, 2,  0   ], [14, 5,  0.10], [12, 8,  0.20],
@@ -234,7 +237,7 @@ export const Tawarr2Vector: React.FC<{ balance: number }> = ({ balance }) => {
 };
 
 // Basmala — crescent moon (spiritual, personal)
-export const BasmalaVector: React.FC<{ balance: number }> = ({ balance }) => {
+const BasmalaVector: React.FC<{ balance: number }> = ({ balance }) => {
   const d = balanceToDuration(balance);
   const dots: [number, number, number][] = [
     [12, 2,  0   ], [17, 4,  0.09], [20, 8,  0.18],
@@ -252,7 +255,7 @@ export const BasmalaVector: React.FC<{ balance: number }> = ({ balance }) => {
 };
 
 // Mariam — heart (personal, dear to you)
-export const MariamVector: React.FC<{ balance: number }> = ({ balance }) => {
+const MariamVector: React.FC<{ balance: number }> = ({ balance }) => {
   const d = balanceToDuration(balance);
   const dots: [number, number, number][] = [
     [12, 7,  0   ],
@@ -272,7 +275,7 @@ export const MariamVector: React.FC<{ balance: number }> = ({ balance }) => {
 };
 
 // Sadaqa — ascending sprout / rising (charity = growth)
-export const SadaqaVector: React.FC<{ balance: number }> = ({ balance }) => {
+const SadaqaVector: React.FC<{ balance: number }> = ({ balance }) => {
   const d = balanceToDuration(balance);
   const dots: [number, number, number][] = [
     [12, 2,  0   ],
@@ -286,45 +289,6 @@ export const SadaqaVector: React.FC<{ balance: number }> = ({ balance }) => {
     <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" className="text-ink">
       {dots.map(([cx, cy, frac], i) => (
         <circle key={i} cx={cx} cy={cy} r={i === 0 ? 1.5 : 1.1}
-          style={{ animation: `vectorFade ${d}s ease-in-out infinite`, animationDelay: `${frac * d}s` }} />
-      ))}
-    </svg>
-  );
-};
-
-// Total Physical — stacked cash notes (horizontal bars)
-export const TotalPhysicalVector: React.FC<{ balance: number }> = ({ balance }) => {
-  const d = balanceToDuration(balance);
-  const dots: [number, number, number][] = [
-    [3,5,0],[7,5,0.05],[12,5,0.10],[17,5,0.05],[21,5,0],
-    [3,9,0.20],[7,9,0.25],[12,9,0.30],[17,9,0.25],[21,9,0.20],
-    [3,13,0.40],[7,13,0.45],[12,13,0.50],[17,13,0.45],[21,13,0.40],
-    [3,17,0.60],[7,17,0.65],[12,17,0.70],[17,17,0.65],[21,17,0.60],
-    [3,21,0.80],[7,21,0.85],[12,21,0.90],[17,21,0.85],[21,21,0.80],
-  ];
-  return (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" className="text-ink">
-      {dots.map(([cx, cy, frac], i) => (
-        <circle key={i} cx={cx} cy={cy} r="0.9"
-          style={{ animation: `vectorFade ${d}s ease-in-out infinite`, animationDelay: `${frac * d}s` }} />
-      ))}
-    </svg>
-  );
-};
-
-// Total Virtual — ordered 4×4 lattice (digital / virtual)
-export const TotalVirtualVector: React.FC<{ balance: number }> = ({ balance }) => {
-  const d = balanceToDuration(balance);
-  const pts: [number, number, number][] = [
-    [4,4,0],[10,4,0.10],[14,4,0.10],[20,4,0],
-    [4,10,0.20],[10,10,0.30],[14,10,0.30],[20,10,0.20],
-    [4,14,0.40],[10,14,0.50],[14,14,0.50],[20,14,0.40],
-    [4,20,0.60],[10,20,0.70],[14,20,0.70],[20,20,0.60],
-  ];
-  return (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" className="text-ink">
-      {pts.map(([cx, cy, frac], i) => (
-        <circle key={i} cx={cx} cy={cy} r={[0,3,12,15].includes(i) ? 1.4 : 1.0}
           style={{ animation: `vectorFade ${d}s ease-in-out infinite`, animationDelay: `${frac * d}s` }} />
       ))}
     </svg>

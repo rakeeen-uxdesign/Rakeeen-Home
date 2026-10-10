@@ -3,8 +3,21 @@ import { useFirebaseSync } from '@/data/useFirebaseSync';
 import { usePrayer } from '@/data/usePrayer';
 import { POMODORO_WEEKLY_MOCK } from '@/constants/mockData';
 import { getPomoTodayIdx } from '@/domain/day';
-import { breakMinutesFor } from '@/domain/focus/session';
+import { getDayMoments } from '@/domain/devotion/prayer';
+import {
+  breakMinutesFor, recordSession, type FocusDayStats, type FocusLogEntry, type FocusWeekDay,
+} from '@/domain/focus/session';
 import { formatDurationText } from '@/lib/format';
+
+/** The slice of a Discord embed the Pomodoro webhook posts. */
+interface DiscordEmbed {
+  title: string;
+  description: string;
+  color: number;
+  fields?: Array<{ name: string; value: string; inline?: boolean }>;
+  footer: { text: string };
+  timestamp: string;
+}
 
 interface PomodoroContextType {
   timeLeft: number;
@@ -13,15 +26,13 @@ interface PomodoroContextType {
   running: boolean;
   mode: 'focus' | 'break';
   sessions: number;
-  weekStats: any[];
-  logs: any[];
-  history: Record<string, { sessions: number, minutes: number, logs?: any[] }>;
+  weekStats: FocusWeekDay[];
+  logs: FocusLogEntry[];
+  history: Record<string, FocusDayStats & { logs?: FocusLogEntry[] }>;
   todayIdx: number;
   focusDuration: number;
   breakDuration: number;
-  setFocusDuration: (m: number) => void;
-  setBreakDuration: (m: number) => void;
-  setWeekStats: (v: any) => void;
+  setWeekStats: (v: FocusWeekDay[]) => void;
   start: () => void;
   pause: () => void;
   reset: () => void;
@@ -43,12 +54,12 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [overtime, setOvertime] = useState(0);
   const [isOvertime, setIsOvertime] = useState(false);
   const [sessions, setSessions] = useFirebaseSync<number>('pomodoro_sessions', 0);
-  const [rawWeekStats, setWeekStats] = useFirebaseSync<any[]>('pomodoro_week', POMODORO_WEEKLY_MOCK);
+  const [rawWeekStats, setWeekStats] = useFirebaseSync<FocusWeekDay[]>('pomodoro_week', POMODORO_WEEKLY_MOCK);
   const weekStats = Array.isArray(rawWeekStats) && rawWeekStats.length === 7 ? rawWeekStats : POMODORO_WEEKLY_MOCK;
-  const [logs, setLogs] = useFirebaseSync<any[]>('pomodoro_logs', []);
-  const [history] = useFirebaseSync<Record<string, { sessions: number, minutes: number, logs?: any[] }>>('pomodoro_history', {});
+  const [logs, setLogs] = useFirebaseSync<FocusLogEntry[]>('pomodoro_logs', []);
+  const [history] = useFirebaseSync<Record<string, FocusDayStats & { logs?: FocusLogEntry[] }>>('pomodoro_history', {});
   const todayIdx = getPomoTodayIdx();
-  const timerRef = useRef<any>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Checkpoint of the in-progress timer, so a reload/crash mid-session doesn't
   // silently lose everything since the last completed session (see incident:
@@ -118,16 +129,6 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setRunning(checkpoint.running);
   }, [checkpoint, checkpointReady, FOCUS]);
 
-  const setFocusDuration = useCallback((m: number) => {
-    // Hardcoded default 25 minutes, ignoring changes
-  }, []);
-
-  const setBreakDuration = useCallback((m: number) => {
-    // Dynamic calculations done automatically, ignoring manual set
-  }, []);
-
-
-
   // Daily Reset handled by DailyResetManager (src/app/)
 
   // Warn before leaving site while timer is running
@@ -145,11 +146,10 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 
   const sendDiscordNotification = useCallback(async (type: 'focus_started' | 'focus_timer_up' | 'focus_complete' | 'break_complete' | 'test', data?: { duration?: number, overtime?: number }) => {
-    // @ts-ignore
     const webhookUrl = import.meta.env.VITE_DISCORD_POMODORO_WEBHOOK;
     if (!webhookUrl) return;
 
-    const embeds: any[] = [];
+    const embeds: DiscordEmbed[] = [];
     
     if (type === 'focus_timer_up') {
       embeds.push({
@@ -301,9 +301,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     sendDiscordNotification('focus_complete', { duration: focusDuration, overtime });
 
     const currentWeekStats = Array.isArray(weekStats) && weekStats.length === 7 ? weekStats : POMODORO_WEEKLY_MOCK;
-    const updated = currentWeekStats.map((d: any, i: number) => 
-      i === todayIdx ? { ...d, sessions: d.sessions + 1, minutes: (d.minutes || 0) + focusGained } : d
-    );
+    const updated = recordSession(currentWeekStats, todayIdx, focusGained);
     setWeekStats(updated);
 
     setMode('break');
@@ -350,9 +348,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     sendDiscordNotification('focus_complete', { duration: focusDuration, overtime });
 
     const currentWeekStats = Array.isArray(weekStats) && weekStats.length === 7 ? weekStats : POMODORO_WEEKLY_MOCK;
-    const updated = currentWeekStats.map((d: any, i: number) => 
-      i === todayIdx ? { ...d, sessions: d.sessions + 1, minutes: (d.minutes || 0) + focusGained } : d
-    );
+    const updated = recordSession(currentWeekStats, todayIdx, focusGained);
     setWeekStats(updated);
 
     setMode('break');
@@ -381,9 +377,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const now = new Date();
       const todayDateStr = now.toDateString();
       if (firedIshaAutoSaveRef.current === todayDateStr) return;
-      const [ishaH, ishaM] = (nightLockPrayerTimes?.Isha || '19:00').split(':').map(Number);
-      const todayIsha = new Date(now.getFullYear(), now.getMonth(), now.getDate(), ishaH, ishaM, 0, 0);
-      if (now < todayIsha) return;
+      if (now.getTime() < getDayMoments(nightLockPrayerTimes, now).isha) return;
       firedIshaAutoSaveRef.current = todayDateStr;
 
       // Read live timeLeft/overtime from the checkpoint ref (updated every render, see
@@ -397,9 +391,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setLogs(l => [{ time: nowTime, duration: focusGained }, ...l]);
       sendDiscordNotification('focus_complete', { duration: focusDuration, overtime: liveOvertime });
       const currentWeekStats = Array.isArray(weekStats) && weekStats.length === 7 ? weekStats : POMODORO_WEEKLY_MOCK;
-      const updated = currentWeekStats.map((d: any, i: number) =>
-        i === todayIdx ? { ...d, sessions: d.sessions + 1, minutes: (d.minutes || 0) + focusGained } : d
-      );
+      const updated = recordSession(currentWeekStats, todayIdx, focusGained);
       setWeekStats(updated);
 
       // Go fully idle rather than into a break — Focus (and, by extension, starting a
@@ -419,7 +411,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <PomodoroContext.Provider value={{
       timeLeft, overtime, isOvertime, running, mode, sessions, weekStats, history, todayIdx,
-      focusDuration, breakDuration, setFocusDuration, setBreakDuration,
+      focusDuration, breakDuration,
       setWeekStats, logs,
       start, pause, reset, startBreak, startNewSession, skipBreak, saveProgress
     }}>

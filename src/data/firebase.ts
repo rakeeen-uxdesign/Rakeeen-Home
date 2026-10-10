@@ -26,4 +26,4 @@ export const db = initializeFirestore(app, {
 });
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-export const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
+if (typeof window !== 'undefined') getAnalytics(app);

@@ -120,6 +120,19 @@ tokens — they don't hardcode colors. When the visual design changes (Phase 4 o
 current redesign work), it changes in `global.css` + `ui/`, and every feature
 inherits it automatically instead of being edited screen by screen.
 
+**Colour classes.** The runtime palette in `global.css` (`--ink`, `--paper`, `--paper-dark`,
+`--bg`, `--sepia`, `--rust`, `--forest`, `--ink-faded`) is exposed to Tailwind through an
+`@theme inline` block, so `text-ink/40`, `border-ink/10`, `bg-paper-dark`, `text-forest`…
+all work and follow dark mode on their own. Add a new palette colour in both places
+(the `:root` / `.dark-theme` variables, then the `@theme inline` line).
+
+**Switchers.** `ui/Tabs.tsx` is page-level navigation (plain labels, a sliding line
+under the current one); `ui/FilterSelect.tsx` narrows a list or chart (a button
+that opens a short list). Don't hand-roll a boxed segmented control again.
+
+**Theme.** `lib/theme.ts` owns dark/light: `main.tsx` applies the saved choice before
+the first render (so every route starts in it), and `setTheme()` switches and saves.
+
 **Icons** are their own small design system, all in one file:
 `src/ui/icons.tsx` is the only file that imports from
 `@hugeicons/core-free-icons` (raw path data — `@hugeicons/react` isn't a
@@ -147,9 +160,9 @@ outline.
 
 ```
 npm run dev        # local dev server
-npm run build       # production build (this is the real "did I break it" check —
-                     # esbuild here, not tsc, so it catches resolution errors, not
-                     # type errors)
+npm run build       # production build — esbuild, so it catches resolution errors
+                     # but not type errors
+npm run typecheck    # tsc --noEmit (strict + no unused locals/params) — keep it at 0
 npm test             # vitest, watch mode
 npm run test:run     # vitest, single run — use this one in CI / before committing
 ```

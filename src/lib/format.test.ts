@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatTime, formatDurationText, addMinutes } from '@/lib/format';
+import { formatTime, formatDurationText } from '@/lib/format';
 
 describe('formatTime', () => {
   it('pads under 100 minutes', () => {
@@ -27,14 +27,5 @@ describe('formatDurationText', () => {
   it('rounds and floors negatives to zero', () => {
     expect(formatDurationText(59.6)).toBe('1h');
     expect(formatDurationText(-5)).toBe('0m');
-  });
-});
-
-describe('addMinutes', () => {
-  it('adds within the hour', () => {
-    expect(addMinutes('09:00', 45)).toBe('09:45');
-  });
-  it('carries into the next hour', () => {
-    expect(addMinutes('09:40', 30)).toBe('10:10');
   });
 });
